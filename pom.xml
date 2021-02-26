@@ -1,0 +1,81 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.jenkins-ci.plugins</groupId>
+        <artifactId>plugin</artifactId>
+        <version>4.16</version><!-- which version of Jenkins is this plugin built against? -->
+        <relativePath />
+    </parent>    
+
+    <groupId>com.adobe.ci.aquarium</groupId>
+    <artifactId>aquarium-net-jenkins</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>hpi</packaging>
+    <name>Aquarium Net Jenkins Plugin</name>
+    <description>Dynamically allocates required resources from Aquarium Fish cluster nodes</description>
+    <url>https://github.com/adobe/aquarium-net-jenkins/</url>
+
+    <developers>
+        <developer>
+            <id>sparshev</id>
+            <name>Sergei Parshev</name>
+        </developer>
+    </developers>
+    
+    <repositories>
+        <repository>
+            <id>repo.jenkins-ci.org</id>
+            <url>https://repo.jenkins-ci.org/public/</url>
+        </repository>
+    </repositories>    
+    
+    <properties>
+        <jenkins.version>2.164.3</jenkins.version>
+        <java.level>8</java.level>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<guice.version>3.0</guice.version>
+        <ivy.plugin.version>1.19</ivy.plugin.version>        
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins</groupId>
+            <artifactId>durable-task</artifactId>
+            <version>1.35</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins</groupId>
+            <artifactId>credentials</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins</groupId>
+            <artifactId>plain-credentials</artifactId>
+            <version>1.5</version>
+        </dependency>
+    </dependencies>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>repo.jenkins-ci.org</id>
+            <url>https://repo.jenkins-ci.org/public/</url>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>findbugs-maven-plugin</artifactId>
+                <version>2.4.1</version>
+                <configuration>
+                     <xmlOutput>true</xmlOutput>
+                     <!-- Optional directory to put findbugs xdoc xml report -->
+                     <xmlOutputDirectory>target/site</xmlOutputDirectory>
+                </configuration>
+           </plugin>
+	   </plugins>
+    </reporting>
+</project>  

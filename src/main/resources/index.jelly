@@ -1,0 +1,4 @@
+<?jelly escape-by-default='true'?>
+<div>
+  Allows to use Aquarium Fish cluster as the resources provider.
+</div>
