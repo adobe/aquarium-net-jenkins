@@ -1,6 +1,7 @@
 package com.adobe.ci.aquarium.net;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.logging.Level;
@@ -13,6 +14,7 @@ import org.kohsuke.stapler.DataBoundConstructor;
 import hudson.model.TaskListener;
 import hudson.slaves.JNLPLauncher;
 import hudson.slaves.SlaveComputer;
+import net.sf.json.JSONObject;
 
 import javax.annotation.CheckForNull;
 
@@ -53,26 +55,18 @@ public class AquariumLauncher extends JNLPLauncher {
         try {
             // Request for resource
             AquariumCloud cloud = node.getAquariumCloud();
-            URL url = new URL(cloud.getInitHostUrl());
-            String url_path = StringUtils.stripEnd(url.getPath(), "/") + "/api/v1/resource/" + node.getNodeName();
-            if( url.getQuery() != null )
-                url_path += "?" + url.getQuery();
-            url = new URL(url.getProtocol(), url.getHost(), url.getPort(), url_path, null);
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            LOG.log(Level.INFO, "Request POST to: " + url);
+            AquariumClient client = new AquariumClient(cloud.getInitHostUrl(), cloud.getCredentialsId());
+            JSONObject app = client.applicationCreate(
+                    node.getLabelString(),
+                    cloud.getJenkinsUrl(),
+                    node.getNodeName(),
+                    comp.getJnlpMac()
+            );
 
-            con.setRequestProperty("Authorization", "Basic " + AquariumCloud.getBasicAuthCreds(cloud.getCredentialsId()));
-
-            con.setRequestMethod("POST");
-            con.setDoOutput(false);
-            int status = con.getResponseCode();
-            if( status != 200 ) {
-                throw new Exception("Allocation response code is " + status);
-            }
-            con.disconnect();
+            node.setApplicationId(app.getInt("ID"));
 
             // Wait for agent connection
-            int waitForSlaveToConnect = 300; // TODO: just 5 mins here
+            int waitForSlaveToConnect = 600; // TODO: just 10Node was deleted, computer mins here
             int waitedForSlave;
 
             SlaveComputer slaveComputer = null;
@@ -87,13 +81,14 @@ public class AquariumLauncher extends JNLPLauncher {
 
                 // Check that the resource hasn't failed already
                 // TODO
-                /*status = client.getStatus();
-                if( status != 200 ) {
+                JSONObject status = client.applicationStatusGet(app.getInt("ID"));
+                if( status.getString("status") == "ERROR" ) {
                     // Resource launch failed
+                    LOG.log(Level.WARNING, "Unable to allocate resource:" + status.getString("description") + ", node:" + comp.getName());
                     break;
-                }*/
+                }
 
-                Thread.sleep(1000);
+                Thread.sleep(5000);
             }
             if (slaveComputer == null || slaveComputer.isOffline()) {
                 throw new IllegalStateException(

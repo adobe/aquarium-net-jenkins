@@ -48,9 +48,11 @@ public class AquariumSlave extends AbstractCloudSlave {
     private final String cloudName;
     private transient Set<Queue.Executable> executables = new HashSet<>();
 
+    private Integer application_id;
+
     protected AquariumSlave(String name, String nodeDescription, String cloudName, String labelStr,
                             ComputerLauncher computerLauncher, RetentionStrategy rs) throws Descriptor.FormException, IOException {
-        super(name, nodeDescription, null, 1, Mode.NORMAL, labelStr, computerLauncher, null, new SlaveTools());
+        super(name, nodeDescription, null, 1, Mode.NORMAL, labelStr, computerLauncher, rs, new SlaveTools());
         this.cloudName = cloudName;
     }
 
@@ -86,6 +88,10 @@ public class AquariumSlave extends AbstractCloudSlave {
     @Nonnull
     public AquariumCloud getAquariumCloud() {
         return getAquariumCloud(getCloudName());
+    }
+
+    public void setApplicationId(Integer id) {
+        this.application_id = id;
     }
 
     private static AquariumCloud getAquariumCloud(String cloudName) {
@@ -146,20 +152,9 @@ public class AquariumSlave extends AbstractCloudSlave {
         }
 
         try {
-            URL url = new URL(cloud.getInitHostUrl());
-            String url_path = StringUtils.stripEnd(url.getPath(), "/") + "/api/v1/resource/" + getNodeName();
-            if( url.getQuery() != null )
-                url_path += "?" + url.getQuery();
-            url = new URL(url.getProtocol(), url.getHost(), url.getPort(), url_path, null);
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            LOG.log(Level.INFO, "Request DELETE to: " + url);
-
-            con.setRequestProperty("Authorization", "Basic " + AquariumCloud.getBasicAuthCreds(cloud.getCredentialsId()));
-
-            con.setRequestMethod("DELETE");
-            con.setDoOutput(false);
-            int status = con.getResponseCode();
-            con.disconnect();
+            if( this.application_id != null ) {
+                new AquariumClient(cloud.getInitHostUrl(), cloud.getCredentialsId()).applicationDeallocate(this.application_id);
+            }
         } catch (Exception e) {
             String msg = String.format("Failed to remove resource from %s. There may be leftover resources on the Aquarium cluster.", getCloudName());
             e.printStackTrace(listener.fatalError(msg));
@@ -179,9 +174,9 @@ public class AquariumSlave extends AbstractCloudSlave {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
+        if( this == o ) return true;
+        if( o == null || getClass() != o.getClass() ) return false;
+        if( !super.equals(o) ) return false;
         AquariumSlave that = (AquariumSlave) o;
         return cloudName.equals(that.cloudName);
     }
@@ -259,7 +254,7 @@ public class AquariumSlave extends AbstractCloudSlave {
         private RetentionStrategy determineRetentionStrategy() {
             // In case something will go wrong
             // TODO: not working properly
-            return new OnceRetentionStrategy(2);
+            return new OnceRetentionStrategy(5);
         }
 
         public AquariumSlave build() throws IOException, Descriptor.FormException {

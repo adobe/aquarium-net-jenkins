@@ -5,7 +5,6 @@ import static org.apache.commons.lang.StringUtils.isEmpty;
 import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
-import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.domains.URIRequirementBuilder;
 import com.google.common.util.concurrent.Futures;
@@ -22,7 +21,6 @@ import java.lang.String;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import java.util.concurrent.Future;
@@ -32,7 +30,7 @@ import java.util.stream.Collectors;
 
 import hudson.util.ListBoxModel;
 import jenkins.model.Jenkins;
-import org.apache.commons.codec.binary.Base64;
+import net.sf.json.JSONObject;
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundSetter;
@@ -72,7 +70,7 @@ public class AquariumCloud extends Cloud {
     }
 
     public String getJenkinsUrl() {
-        return initHostUrl;
+        return jenkinsUrl;
     }
 
     @DataBoundSetter
@@ -93,7 +91,14 @@ public class AquariumCloud extends Cloud {
     @Override
     public boolean canProvision(Label label) {
         LOG.log(Level.INFO, "Can provision label? : " + label.getName());
-        return label.getName().equals("xcode12.2"); // TODO: for demo
+        // TODO: Better to use some caching here
+        try {
+            return !(new AquariumClient(this.getInitHostUrl(), this.getCredentialsId()).labelFind(label.getName()).isEmpty());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return false;
     }
 
     private PlannedNode buildAgent(String label) {
@@ -163,26 +168,6 @@ public class AquariumCloud extends Cloud {
         return (DescriptorImpl) super.getDescriptor();
     }
 
-    public static String getBasicAuthCreds(String credentialsId) {
-        StandardUsernamePasswordCredentials c = (StandardUsernamePasswordCredentials)CredentialsMatchers.firstOrNull(
-                CredentialsProvider.lookupCredentials(
-                        StandardCredentials.class,
-                        Jenkins.get(),
-                        ACL.SYSTEM,
-                        Collections.emptyList()
-                ),
-                CredentialsMatchers.allOf(
-                        CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class),
-                        CredentialsMatchers.withId(credentialsId)
-                )
-        );
-
-        String auth = c.getUsername() + ":" + c.getPassword().getPlainText();
-        byte[] encodedAuth = Base64.encodeBase64(auth.getBytes(StandardCharsets.UTF_8));
-
-        return new String(encodedAuth);
-    }
-
     @Extension
     public static final class DescriptorImpl extends Descriptor<Cloud> {
 
@@ -203,21 +188,9 @@ public class AquariumCloud extends Cloud {
 
             URL url = null;
             try {
-                url = new URL(initHostUrl);
-                String url_path = StringUtils.stripEnd(url.getPath(), "/") + "/api/v1/resource/";
-                if( url.getQuery() != null )
-                    url_path += "?" + url.getQuery();
-                url = new URL(url.getProtocol(), url.getHost(), url.getPort(), url_path, null);
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                LOG.log(Level.INFO, "Check connection: " + url);
-
-                con.setRequestProperty("Authorization", "Basic " + getBasicAuthCreds(credentialsId));
-
-                con.setRequestMethod("GET");
-                con.setDoOutput(false);
-                int status = con.getResponseCode();
-                con.disconnect();
-                return FormValidation.ok("Connected to Aquarium Fish node (HTTP %d)", status);
+                JSONObject me = new AquariumClient(initHostUrl, credentialsId).meGet();
+                // Request went with no exceptions - so we're good
+                return FormValidation.ok("Connected to Aquarium Fish node as '%s'", me.getString("name"));
             } catch (Exception e) {
                 LOG.log(Level.WARNING, String.format("Error testing connection %s", url), e);
                 return FormValidation.error("Error testing connection %s: %s", initHostUrl, e.getMessage());
