@@ -2,8 +2,6 @@ package com.adobe.ci.aquarium.net;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
@@ -48,7 +46,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     private final String cloudName;
     private transient Set<Queue.Executable> executables = new HashSet<>();
 
-    private Integer application_id;
+    private Long application_id;
 
     protected AquariumSlave(String name, String nodeDescription, String cloudName, String labelStr,
                             ComputerLauncher computerLauncher, RetentionStrategy rs) throws Descriptor.FormException, IOException {
@@ -90,7 +88,7 @@ public class AquariumSlave extends AbstractCloudSlave {
         return getAquariumCloud(getCloudName());
     }
 
-    public void setApplicationId(Integer id) {
+    public void setApplicationId(Long id) {
         this.application_id = id;
     }
 
@@ -153,7 +151,7 @@ public class AquariumSlave extends AbstractCloudSlave {
 
         try {
             if( this.application_id != null ) {
-                new AquariumClient(cloud.getInitHostUrl(), cloud.getCredentialsId()).applicationDeallocate(this.application_id);
+                cloud.getClient().applicationDeallocate(this.application_id);
             }
         } catch (Exception e) {
             String msg = String.format("Failed to remove resource from %s. There may be leftover resources on the Aquarium cluster.", getCloudName());
@@ -253,8 +251,7 @@ public class AquariumSlave extends AbstractCloudSlave {
 
         private RetentionStrategy determineRetentionStrategy() {
             // In case something will go wrong
-            // TODO: not working properly
-            return new OnceRetentionStrategy(5);
+            return new OnceRetentionStrategy(5); // TODO: timeout
         }
 
         public AquariumSlave build() throws IOException, Descriptor.FormException {

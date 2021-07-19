@@ -11,6 +11,9 @@ Aquarium resources manager jenkins plugin to allocate required resources on dema
 To build just download the latest maven from apache and run `mvn clean package` - it will create the
 `./target/aquarium-net-jenkins.hpi` file which you can use to install in Jenkins.
 
+If you want to use custom Fish OpenAPI specification during the build - just set the profile to
+`Local`: `mvn clean package -P Local`
+
 ## Usage
 
 Just install it to your jenkins, specify some Aquarium Fish node API address and choose credentials.

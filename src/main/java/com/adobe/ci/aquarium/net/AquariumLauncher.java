@@ -1,20 +1,17 @@
 package com.adobe.ci.aquarium.net;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.adobe.ci.aquarium.fish.client.model.Application;
+import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
 import com.google.common.base.Throwables;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 import hudson.model.TaskListener;
 import hudson.slaves.JNLPLauncher;
 import hudson.slaves.SlaveComputer;
-import net.sf.json.JSONObject;
 
 import javax.annotation.CheckForNull;
 
@@ -55,15 +52,15 @@ public class AquariumLauncher extends JNLPLauncher {
         try {
             // Request for resource
             AquariumCloud cloud = node.getAquariumCloud();
-            AquariumClient client = new AquariumClient(cloud.getInitHostUrl(), cloud.getCredentialsId());
-            JSONObject app = client.applicationCreate(
+            AquariumClient client = cloud.getClient();
+            Application app = client.applicationCreate(
                     node.getLabelString(),
                     cloud.getJenkinsUrl(),
                     node.getNodeName(),
                     comp.getJnlpMac()
             );
 
-            node.setApplicationId(app.getInt("ID"));
+            node.setApplicationId(app.getID());
 
             // Wait for agent connection
             int waitForSlaveToConnect = 600; // TODO: just 10Node was deleted, computer mins here
@@ -81,10 +78,10 @@ public class AquariumLauncher extends JNLPLauncher {
 
                 // Check that the resource hasn't failed already
                 // TODO
-                JSONObject status = client.applicationStatusGet(app.getInt("ID"));
-                if( status.getString("status") == "ERROR" ) {
+                ApplicationState status = client.applicationStateGet(app.getID());
+                if( status.getStatus() == ApplicationState.StatusEnum.ERROR ) {
                     // Resource launch failed
-                    LOG.log(Level.WARNING, "Unable to allocate resource:" + status.getString("description") + ", node:" + comp.getName());
+                    LOG.log(Level.WARNING, "Unable to allocate resource:" + status.getDescription() + ", node:" + comp.getName());
                     break;
                 }
 

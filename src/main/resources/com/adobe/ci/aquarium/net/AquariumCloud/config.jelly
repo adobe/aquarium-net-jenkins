@@ -10,12 +10,16 @@
         <f:textbox/>
     </f:entry>
 
-    <f:entry title="${%Credentials}" field="credentialsId">
+    <f:entry title="${%User Basic Credentials}" field="credentialsId">
+        <c:select/>
+    </f:entry>
+
+    <f:entry title="${%CA Certificate Credentials}" field="caCredentialsId">
         <c:select/>
     </f:entry>
 
     <f:validateButton title="${%Test Connection}" progress="${%Testing...}"
-                      method="testConnection" with="name,initHostUrl,credentialsId"/>
+                      method="testConnection" with="name,initHostUrl,credentialsId,caCredentialsId"/>
 
     <f:entry title="${%Jenkins URL}" field="jenkinsUrl">
         <f:textbox />

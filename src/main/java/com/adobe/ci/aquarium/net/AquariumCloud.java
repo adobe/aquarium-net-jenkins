@@ -1,5 +1,7 @@
 package com.adobe.ci.aquarium.net;
 
+import com.adobe.ci.aquarium.fish.client.model.User;
+
 import static org.apache.commons.lang.StringUtils.isEmpty;
 
 import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
@@ -18,7 +20,6 @@ import hudson.slaves.Cloud;
 
 import java.io.IOException;
 import java.lang.String;
-import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
@@ -30,8 +31,8 @@ import java.util.stream.Collectors;
 
 import hudson.util.ListBoxModel;
 import jenkins.model.Jenkins;
-import net.sf.json.JSONObject;
 import org.apache.commons.lang.StringUtils;
+import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
@@ -49,6 +50,7 @@ public class AquariumCloud extends Cloud {
     private String initHostUrl;
     @CheckForNull
     private String credentialsId;
+    private String caCredentialsId;
     private String jenkinsUrl;
 
     @DataBoundConstructor
@@ -57,20 +59,27 @@ public class AquariumCloud extends Cloud {
         LOG.log(Level.INFO, "STARTING Aquarium CLOUD");
     }
 
+    // Used by jelly
     public String getName() {
         return name;
     }
 
+    // Used by jelly
     public String getInitHostUrl() {
         return initHostUrl;
     }
 
-    public String getCredentialsId() {
-        return credentialsId;
-    }
+    // Used by jelly
+    public String getJenkinsUrl() { return jenkinsUrl; }
 
-    public String getJenkinsUrl() {
-        return jenkinsUrl;
+    // Used by jelly
+    public String getCredentialsId() { return credentialsId; }
+
+    // Used by jelly
+    public String getCaCredentialsId() { return caCredentialsId; }
+
+    public AquariumClient getClient() {
+        return new AquariumClient(this.initHostUrl, this.credentialsId, this.caCredentialsId);
     }
 
     @DataBoundSetter
@@ -84,6 +93,11 @@ public class AquariumCloud extends Cloud {
     }
 
     @DataBoundSetter
+    public void setCaCredentialsId(String value) {
+        caCredentialsId = Util.fixEmpty(value);
+    }
+
+    @DataBoundSetter
     public void setJenkinsUrl(String value) {
         this.jenkinsUrl = Util.fixEmptyAndTrim(value);
     }
@@ -93,7 +107,7 @@ public class AquariumCloud extends Cloud {
         LOG.log(Level.INFO, "Can provision label? : " + label.getName());
         // TODO: Better to use some caching here
         try {
-            return !(new AquariumClient(this.getInitHostUrl(), this.getCredentialsId()).labelFind(label.getName()).isEmpty());
+            return !(this.getClient().labelFind(label.getName()).isEmpty());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -180,7 +194,8 @@ public class AquariumCloud extends Cloud {
         @SuppressWarnings("unused") // used by jelly
         public FormValidation doTestConnection(@QueryParameter String name,
                                                @QueryParameter String initHostUrl,
-                                               @QueryParameter String credentialsId) {
+                                               @QueryParameter String credentialsId,
+                                               @QueryParameter String caCredentialsId) {
             Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
             if (StringUtils.isBlank(name))
@@ -188,10 +203,10 @@ public class AquariumCloud extends Cloud {
 
             URL url = null;
             try {
-                JSONObject me = new AquariumClient(initHostUrl, credentialsId).meGet();
+                User me = new AquariumClient(initHostUrl, credentialsId, caCredentialsId).meGet();
                 // Request went with no exceptions - so we're good
-                return FormValidation.ok("Connected to Aquarium Fish node as '%s'", me.getString("name"));
-            } catch (Exception e) {
+                return FormValidation.ok("Connected to Aquarium Fish node as '%s'", me.getName());
+            } catch( Exception e ) {
                 LOG.log(Level.WARNING, String.format("Error testing connection %s", url), e);
                 return FormValidation.error("Error testing connection %s: %s", initHostUrl, e.getMessage());
             }
@@ -235,6 +250,25 @@ public class AquariumCloud extends Cloud {
                             : Collections.EMPTY_LIST,
                     CredentialsMatchers.anyOf(
                             CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class)
+                    )
+            );
+            return result;
+        }
+
+        @RequirePOST
+        @SuppressWarnings("unused") // used by jelly
+        public ListBoxModel doFillCaCredentialsIdItems(@AncestorInPath ItemGroup context, @QueryParameter String serverUrl) {
+            Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+            StandardListBoxModel result = new StandardListBoxModel();
+            result.includeEmptyValue();
+            result.includeMatchingAs(
+                    ACL.SYSTEM,
+                    context,
+                    StandardCredentials.class,
+                    serverUrl != null ? URIRequirementBuilder.fromUri(serverUrl).build()
+                            : Collections.EMPTY_LIST,
+                    CredentialsMatchers.anyOf(
+                            CredentialsMatchers.instanceOf(FileCredentials.class)
                     )
             );
             return result;
