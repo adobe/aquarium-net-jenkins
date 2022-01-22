@@ -21,6 +21,7 @@ import org.apache.commons.lang.StringEscapeUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class AquariumClient {
@@ -95,6 +96,7 @@ public class AquariumClient {
     }
 
     public Application applicationCreate(String label_name, String jenkins_url, String agent_name, String agent_secret) throws Exception {
+        // TODO: not actually optimal to get all the labels, better the latest and only ID.
         List<Label> labels = labelFind(label_name);
         if( labels.isEmpty() )
             throw new Exception("Application create unable find label " + label_name);
@@ -107,7 +109,8 @@ public class AquariumClient {
         metadata.put("JENKINS_AGENT_SECRET", agent_secret);
 
         app.setMetadata(metadata);
-        app.setLabelID(labels.get(0).getID());
+        // Sorting the labels by version and using the max one
+        app.setLabelID(labels.stream().max(Comparator.comparing(l -> l.getVersion())).get().getID());
 
         return new ApplicationApi(api_client_pool.get(0)).applicationCreatePost(app);
     }
