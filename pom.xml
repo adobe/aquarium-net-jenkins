@@ -47,6 +47,10 @@
         <guice.version>3.0</guice.version>
         <ivy.plugin.version>1.19</ivy.plugin.version>
 
+        <!-- TODO
+            Eventually, want to make this dynamic so it pulls a selectable yaml file to generate from, generated from aquarium-fish server project.
+            Need to define that flow, whether use git or put yaml in jar files, etc. TBD.
+        -->
         <aquarium-fish.openapi.spec.path>https://github.com/adobe/aquarium-fish/raw/master/docs/openapi.yaml</aquarium-fish.openapi.spec.path>
 
         <swagger-core-version>1.6.2</swagger-core-version>

@@ -63,11 +63,9 @@ public class AquariumLauncher extends JNLPLauncher {
             node.setApplicationId(app.getID());
 
             // Wait for agent connection
-            int waitForSlaveToConnect = 600; // TODO: just 10Node was deleted, computer mins here
-            int waitedForSlave;
-
-            SlaveComputer slaveComputer = null;
-            for (waitedForSlave = 0; waitedForSlave < waitForSlaveToConnect; waitedForSlave++) {
+            SlaveComputer slaveComputer;
+            ApplicationState status = client.applicationStateGet(app.getID());
+            while( true ) {
                 slaveComputer = node.getComputer();
                 if( slaveComputer == null ) {
                     throw new IllegalStateException("Node was deleted, computer is null");
@@ -77,8 +75,7 @@ public class AquariumLauncher extends JNLPLauncher {
                 }
 
                 // Check that the resource hasn't failed already
-                // TODO
-                ApplicationState status = client.applicationStateGet(app.getID());
+                status = client.applicationStateGet(app.getID());
                 if( status.getStatus() == ApplicationState.StatusEnum.ERROR ) {
                     // Resource launch failed
                     LOG.log(Level.WARNING, "Unable to allocate resource:" + status.getDescription() + ", node:" + comp.getName());
@@ -87,9 +84,8 @@ public class AquariumLauncher extends JNLPLauncher {
 
                 Thread.sleep(5000);
             }
-            if (slaveComputer == null || slaveComputer.isOffline()) {
-                throw new IllegalStateException(
-                        "Agent is not connected after " + waitedForSlave + " seconds"/*, status:" + status*/);
+            if( slaveComputer.isOffline() ) {
+                throw new IllegalStateException("Agent is not connected, status:" + status.toString());
             }
 
             computer.setAcceptingTasks(true);
