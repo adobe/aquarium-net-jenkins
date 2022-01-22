@@ -1,19 +1,19 @@
 package com.adobe.ci.aquarium.net;
 
-import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 import com.adobe.ci.aquarium.fish.client.model.Application;
 import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
 import com.google.common.base.Throwables;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import org.kohsuke.stapler.DataBoundConstructor;
 import hudson.model.TaskListener;
 import hudson.slaves.JNLPLauncher;
 import hudson.slaves.SlaveComputer;
+import org.jenkinsci.plugins.durabletask.executors.OnceRetentionStrategy;
+import org.kohsuke.stapler.DataBoundConstructor;
 
 import javax.annotation.CheckForNull;
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class AquariumLauncher extends JNLPLauncher {
 
@@ -88,6 +88,8 @@ public class AquariumLauncher extends JNLPLauncher {
                 throw new IllegalStateException("Agent is not connected, status:" + status.toString());
             }
 
+            // Set up the retention strategy to destroy the node when it's completed processes
+            node.setRetentionStrategy(new OnceRetentionStrategy(5));
             computer.setAcceptingTasks(true);
             launched = true;
 

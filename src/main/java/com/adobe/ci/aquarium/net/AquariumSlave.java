@@ -1,8 +1,28 @@
 package com.adobe.ci.aquarium.net;
 
+import hudson.Extension;
+import hudson.FilePath;
+import hudson.Launcher;
+import hudson.Util;
+import hudson.model.Computer;
+import hudson.model.Descriptor;
+import hudson.model.Queue;
+import hudson.model.TaskListener;
+import hudson.remoting.Engine;
+import hudson.remoting.VirtualChannel;
+import hudson.slaves.AbstractCloudSlave;
+import hudson.slaves.Cloud;
+import hudson.slaves.ComputerLauncher;
+import hudson.slaves.SlaveComputer;
+import jenkins.model.Jenkins;
+import jenkins.security.MasterToSlaveCallable;
+import org.apache.commons.lang.RandomStringUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.Validate;
+
+import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.io.Serializable;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -12,26 +32,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
-
-import hudson.FilePath;
-import hudson.Util;
-import hudson.model.*;
-import hudson.slaves.*;
-import hudson.util.DescribableList;
-import org.apache.commons.lang.RandomStringUtils;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
-
-import hudson.Extension;
-import hudson.Launcher;
-import hudson.remoting.Engine;
-import hudson.remoting.VirtualChannel;
-import jenkins.model.Jenkins;
-import jenkins.security.MasterToSlaveCallable;
-import org.jenkinsci.plugins.durabletask.executors.OnceRetentionStrategy;
 
 public class AquariumSlave extends AbstractCloudSlave {
 
@@ -49,16 +49,17 @@ public class AquariumSlave extends AbstractCloudSlave {
     private Long application_id;
 
     protected AquariumSlave(String name, String nodeDescription, String cloudName, String labelStr,
-                            ComputerLauncher computerLauncher, RetentionStrategy rs) throws Descriptor.FormException, IOException {
-        super(name, nodeDescription, null, 1, Mode.NORMAL, labelStr, computerLauncher, rs, new SlaveTools());
+                            ComputerLauncher computerLauncher) throws Descriptor.FormException, IOException {
+        super(name, null, computerLauncher);
+        this.setNodeDescription(nodeDescription);
+        this.setNumExecutors(1);
+        this.setLabelString(labelStr);
         this.cloudName = cloudName;
     }
 
     public String getCloudName() {
         return cloudName;
     }
-
-    private String remoteFS;
 
     @Override
     public String getRemoteFS() {
@@ -217,7 +218,6 @@ public class AquariumSlave extends AbstractCloudSlave {
         private String label;
         private AquariumCloud cloud;
         private ComputerLauncher computerLauncher;
-        private RetentionStrategy retentionStrategy;
 
         public Builder name(String name) {
             this.name = name;
@@ -244,25 +244,14 @@ public class AquariumSlave extends AbstractCloudSlave {
             return this;
         }
 
-        public Builder retentionStrategy(RetentionStrategy retentionStrategy) {
-            this.retentionStrategy = retentionStrategy;
-            return this;
-        }
-
-        private RetentionStrategy determineRetentionStrategy() {
-            // In case something will go wrong
-            return new OnceRetentionStrategy(5); // TODO: timeout
-        }
-
         public AquariumSlave build() throws IOException, Descriptor.FormException {
             Validate.notNull(cloud);
             return new AquariumSlave(
                     name == null ? getSlaveName() : name,
-                    nodeDescription == null ? "no description provided" : nodeDescription,
+                    nodeDescription == null ? "Aquarium agent" : nodeDescription,
                     cloud.getName(),
                     label == null ? "no_label_provided" : label,
-                    computerLauncher == null ? defaultLauncher() : computerLauncher,
-                    retentionStrategy == null ? determineRetentionStrategy() : retentionStrategy);
+                    computerLauncher == null ? defaultLauncher() : computerLauncher);
         }
 
         private AquariumLauncher defaultLauncher() {
@@ -304,20 +293,6 @@ public class AquariumSlave extends AbstractCloudSlave {
             LOG.log(Level.INFO, "Disabled slave engine reconnects.");
             return null;
         }
-    }
-
-    public static class SlaveTools extends DescribableList<NodeProperty<?>,NodePropertyDescriptor> implements Serializable {
-
-        public SlaveTools() {}
-
-        public SlaveTools(Saveable owner) {
-            super(owner);
-        }
-
-        public SlaveTools(Saveable owner, Collection<? extends NodeProperty<?>> initialList) {
-            super(owner,initialList);
-        }
-
     }
 
 }

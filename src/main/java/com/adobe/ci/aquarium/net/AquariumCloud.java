@@ -1,45 +1,40 @@
 package com.adobe.ci.aquarium.net;
 
 import com.adobe.ci.aquarium.fish.client.model.User;
-
-import static org.apache.commons.lang.StringUtils.isEmpty;
-
-import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
-import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
+import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.domains.URIRequirementBuilder;
 import com.google.common.util.concurrent.Futures;
+import hudson.Extension;
 import hudson.Util;
 import hudson.model.*;
 import hudson.security.ACL;
+import hudson.slaves.Cloud;
 import hudson.slaves.NodeProvisioner.PlannedNode;
 import hudson.util.FormValidation;
-import hudson.Extension;
-import hudson.slaves.Cloud;
-
-import java.io.IOException;
-import java.lang.String;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.*;
-
-import java.util.concurrent.Future;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.stream.Collectors;
-
 import hudson.util.ListBoxModel;
 import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import org.kohsuke.stapler.AncestorInPath;
+import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
 import javax.annotation.CheckForNull;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.*;
+import java.util.concurrent.Future;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+
+import static org.apache.commons.lang.StringUtils.isEmpty;
 
 class ServiceInstance {}
 
@@ -119,8 +114,7 @@ public class AquariumCloud extends Cloud {
         Future f;
         String displayName;
         try {
-            AquariumSlave agent = AquariumSlave
-                    .builder().cloud(this).label(label).build();
+            AquariumSlave agent = AquariumSlave.builder().cloud(this).label(label).build();
             displayName = agent.getDisplayName();
             f = Futures.immediateFuture(agent);
         } catch (IOException | Descriptor.FormException e) {
