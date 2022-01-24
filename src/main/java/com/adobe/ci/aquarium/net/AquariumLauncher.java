@@ -1,5 +1,6 @@
 package com.adobe.ci.aquarium.net;
 
+import com.adobe.ci.aquarium.fish.client.ApiException;
 import com.adobe.ci.aquarium.fish.client.model.Application;
 import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
 import com.google.common.base.Throwables;
@@ -64,7 +65,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
             // Wait for agent connection
             SlaveComputer slaveComputer;
-            ApplicationState status = client.applicationStateGet(app.getID());
+            ApplicationState state = null;
             while( true ) {
                 slaveComputer = node.getComputer();
                 if( slaveComputer == null ) {
@@ -74,18 +75,24 @@ public class AquariumLauncher extends JNLPLauncher {
                     break;
                 }
 
+                // TODO: timeout exception could happen here
+
                 // Check that the resource hasn't failed already
-                status = client.applicationStateGet(app.getID());
-                if( status.getStatus() == ApplicationState.StatusEnum.ERROR ) {
-                    // Resource launch failed
-                    LOG.log(Level.WARNING, "Unable to allocate resource:" + status.getDescription() + ", node:" + comp.getName());
-                    break;
+                try {
+                    state = client.applicationStateGet(app.getID());
+                    if( state.getStatus() == ApplicationState.StatusEnum.ERROR ) {
+                        // Resource launch failed
+                        LOG.log(Level.WARNING, "Unable to allocate resource:" + state.getDescription() + ", node:" + comp.getName());
+                        break;
+                    }
+                } catch( ApiException e ) {
+                    LOG.log(Level.WARNING, "Error happened during API request:" + e.toString() + ", node:" + comp.getName());
                 }
 
                 Thread.sleep(5000);
             }
             if( slaveComputer.isOffline() ) {
-                throw new IllegalStateException("Agent is not connected, status:" + status.toString());
+                throw new IllegalStateException("Agent is not connected, status:" + state.toString());
             }
 
             // Set up the retention strategy to destroy the node when it's completed processes
@@ -95,7 +102,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
             try {
                 node.save(); // We need to persist the "launched" setting...
-            } catch (IOException e) {
+            } catch( IOException e ) {
                 LOG.log(Level.WARNING, "Could not save() agent: " + e.getMessage(), e);
             }
         } catch (Throwable ex) {
