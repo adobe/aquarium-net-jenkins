@@ -59,6 +59,8 @@ public class AquariumCloud extends Cloud {
     private String credentialsId;
     private String caCredentialsId;
     private String jenkinsUrl;
+    private String metadata;
+    private List<LabelMapping> labelMappings = new ArrayList<>();
 
     @DataBoundConstructor
     public AquariumCloud(String name) {
@@ -77,13 +79,21 @@ public class AquariumCloud extends Cloud {
     }
 
     // Used by jelly
-    public String getJenkinsUrl() { return jenkinsUrl; }
-
-    // Used by jelly
     public String getCredentialsId() { return credentialsId; }
 
     // Used by jelly
     public String getCaCredentialsId() { return caCredentialsId; }
+
+    // Used by jelly
+    public String getJenkinsUrl() { return jenkinsUrl; }
+
+    // Used by jelly
+    public String getMetadata() { return metadata; }
+
+    // Used by jelly
+    public List<LabelMapping> getLabelMappings() {
+        return labelMappings;
+    }
 
     public AquariumClient getClient() {
         return new AquariumClient(this.initHostUrl, this.credentialsId, this.caCredentialsId);
@@ -109,10 +119,24 @@ public class AquariumCloud extends Cloud {
         this.jenkinsUrl = Util.fixEmptyAndTrim(value);
     }
 
+    @DataBoundSetter
+    public void setMetadata(String value) {
+        metadata = Util.fixEmpty(value);
+    }
+
+    @DataBoundSetter
+    public void setLabelMappings(@CheckForNull List<LabelMapping> labels) {
+        this.labelMappings = new ArrayList<>();
+        if( labels != null ) {
+            this.labelMappings.addAll(labels);
+        }
+    }
+
     @Override
     public boolean canProvision(Label label) {
         LOG.log(Level.INFO, "Can provision label? : " + label.getName());
-        // TODO: Better to use some caching here
+        // TODO: Better to use some caching here, otherwise some lost
+        // connection tells jenkins to not use this cloud anymore
         try {
             return !(this.getClient().labelFind(label.getName()).isEmpty());
         } catch (Exception e) {
@@ -126,7 +150,9 @@ public class AquariumCloud extends Cloud {
         Future f;
         String displayName;
         try {
-            AquariumSlave agent = AquariumSlave.builder().cloud(this).label(label).build();
+            // Make sure the aquarium requested label is first in the label list
+            AquariumSlave agent = AquariumSlave.builder().cloud(this)
+                    .addLabel(label).addLabel(LabelMapping.getLabels(this.labelMappings, label)).build();
             displayName = agent.getDisplayName();
             f = Futures.immediateFuture(agent);
         } catch (IOException | Descriptor.FormException e) {

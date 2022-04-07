@@ -1,6 +1,7 @@
-# Aquarium Net Jenkins
+# [Aquarium Net Jenkins](https://github.com/adobe/aquarium-net-jenkins)
 
-Aquarium resources manager jenkins plugin to allocate required resources on demand.
+[Aquarium](https://github.com/adobe/aquarium-fish/wiki/Aquarium) resources manager jenkins plugin
+to allocate the required resources on demand. 
 
 ## Requirements
 
@@ -8,8 +9,8 @@ Aquarium resources manager jenkins plugin to allocate required resources on dema
 
 ## Build
 
-To build just download the latest maven from apache and run `mvn clean package` - it will create the
-`./target/aquarium-net-jenkins.hpi` file which you can use to install in Jenkins.
+To build just download the latest maven from apache and run `mvn clean package` - it will create
+the `./target/aquarium-net-jenkins.hpi` file which you can use to install in Jenkins.
 
 If you want to use custom Fish OpenAPI specification during the build - just set the profile to
 `Local`: `mvn clean package -P Local`
@@ -30,7 +31,7 @@ connect to the created agent node to serve the build needs.
 
 ## Implementation
 
-Is based on [Scripted Cloud Plugin](https://plugins.jenkins.io/scripted-cloud-plugin/) with a number
-of important changes for dynamic provision:
+The implementation is still PoC and not perfect in any way. For now it's mostly working.
 
-* The agent nodes are created by the plugin, based on the cluster label information.
+Originally was based on [Scripted Cloud Plugin](https://plugins.jenkins.io/scripted-cloud-plugin/),
+but later absorbed alot from [Kubernetes Plugin](https://plugins.jenkins.io/kubernetes/).

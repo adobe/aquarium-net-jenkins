@@ -67,10 +67,11 @@ public class AquariumLauncher extends JNLPLauncher {
             AquariumCloud cloud = node.getAquariumCloud();
             AquariumClient client = cloud.getClient();
             Application app = client.applicationCreate(
-                    node.getLabelString(),
+                    node.getLabelString().split(" ")[0], // Using the first label in the list
                     cloud.getJenkinsUrl(),
                     node.getNodeName(),
-                    comp.getJnlpMac()
+                    comp.getJnlpMac(),
+                    cloud.getMetadata()
             );
 
             node.setApplicationId(app.getID());
@@ -87,12 +88,12 @@ public class AquariumLauncher extends JNLPLauncher {
                     break;
                 }
 
-                // TODO: timeout exception could happen here
-
                 // Check that the resource hasn't failed already
                 try {
                     state = client.applicationStateGet(app.getID());
-                    if( state.getStatus() == ApplicationState.StatusEnum.ERROR ) {
+                    if( state.getStatus() != ApplicationState.StatusEnum.ALLOCATED &&
+                            state.getStatus() != ApplicationState.StatusEnum.ELECTED &&
+                            state.getStatus() != ApplicationState.StatusEnum.NEW) {
                         // Resource launch failed
                         LOG.log(Level.WARNING, "Unable to allocate resource:" + state.getDescription() + ", node:" + comp.getName());
                         break;

@@ -20,17 +20,19 @@ import com.adobe.ci.aquarium.fish.client.model.Application;
 import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
 import com.adobe.ci.aquarium.fish.client.model.Label;
 import com.adobe.ci.aquarium.fish.client.model.User;
-
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
-import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import hudson.security.ACL;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.apache.commons.lang.StringEscapeUtils;
+import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -107,7 +109,7 @@ public class AquariumClient {
         return new LabelApi(api_client_pool.get(0)).labelListGet("name='" + StringEscapeUtils.escapeSql(name) + "'");
     }
 
-    public Application applicationCreate(String label_name, String jenkins_url, String agent_name, String agent_secret) throws Exception {
+    public Application applicationCreate(String label_name, String jenkins_url, String agent_name, String agent_secret, String add_metadata) throws Exception {
         // TODO: not actually optimal to get all the labels, better the latest and only ID.
         List<Label> labels = labelFind(label_name);
         if( labels.isEmpty() )
@@ -119,6 +121,21 @@ public class AquariumClient {
         metadata.put("JENKINS_URL", jenkins_url);
         metadata.put("JENKINS_AGENT_NAME", agent_name);
         metadata.put("JENKINS_AGENT_SECRET", agent_secret);
+
+        if( add_metadata != null && ! add_metadata.isEmpty() ) {
+            try (BufferedReader reader = new BufferedReader(new StringReader(add_metadata))) {
+                String line = reader.readLine();
+                while (line != null) {
+                    String[] line_sep = line.split("=", 2);
+                    if (line_sep.length == 2) {
+                        metadata.put(line_sep[0], line_sep[1]);
+                    }
+                    line = reader.readLine();
+                }
+            } catch (IOException exc) {
+                // nop
+            }
+        }
 
         app.setMetadata(metadata);
         // Sorting the labels by version and using the max one

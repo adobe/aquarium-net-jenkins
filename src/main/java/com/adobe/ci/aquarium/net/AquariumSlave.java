@@ -35,9 +35,7 @@ import org.apache.commons.lang.Validate;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -227,7 +225,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     public static class Builder {
         private String name;
         private String nodeDescription;
-        private String label;
+        private List<String> labels = new ArrayList<>();
         private AquariumCloud cloud;
         private ComputerLauncher computerLauncher;
 
@@ -246,8 +244,10 @@ public class AquariumSlave extends AbstractCloudSlave {
             return this;
         }
 
-        public Builder label(String label) {
-            this.label = label;
+        public Builder addLabel(String label) {
+            if( label != null && !label.isEmpty() ) {
+                this.labels.add(label);
+            }
             return this;
         }
 
@@ -262,7 +262,7 @@ public class AquariumSlave extends AbstractCloudSlave {
                     name == null ? getSlaveName() : name,
                     nodeDescription == null ? "Aquarium agent" : nodeDescription,
                     cloud.getName(),
-                    label == null ? "no_label_provided" : label,
+                    labels == null ? "no_label_provided" : String.join(" ", labels),
                     computerLauncher == null ? defaultLauncher() : computerLauncher);
         }
 

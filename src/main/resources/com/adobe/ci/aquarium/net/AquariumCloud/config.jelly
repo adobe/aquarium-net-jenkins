@@ -24,4 +24,13 @@
     <f:entry title="${%Jenkins URL}" field="jenkinsUrl">
         <f:textbox />
     </f:entry>
+
+    <f:entry title="${%Additional Metadata}" field="metadata">
+        <f:textarea/>
+    </f:entry>
+
+    <f:entry title="${%Label Mappings}" field="labelMappings">
+        <f:repeatableHeteroProperty field="labelMappings" hasHeader="true" addCaption="${%Add Label Mapping}"
+                                    deleteCaption="${%Delete Label Mapping}" />
+    </f:entry>
 </j:jelly>
