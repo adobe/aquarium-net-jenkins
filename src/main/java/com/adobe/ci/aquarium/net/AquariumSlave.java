@@ -52,7 +52,7 @@ public class AquariumSlave extends AbstractCloudSlave {
             .getInteger(AquariumSlave.class.getName() + ".disconnectionTimeout", 5);
 
     private static final long serialVersionUID = -8642936855413034232L;
-    private static final String DEFAULT_AGENT_PREFIX = "jenkins-agent";
+    private static final String DEFAULT_AGENT_PREFIX = "fish";
 
     private final String cloudName;
     private transient Set<Queue.Executable> executables = new HashSet<>();
@@ -70,6 +70,10 @@ public class AquariumSlave extends AbstractCloudSlave {
 
     public String getCloudName() {
         return cloudName;
+    }
+
+    public Long getApplicationId() {
+        return this.application_id;
     }
 
     @Override
@@ -116,7 +120,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     }
 
     static String getSlaveName() {
-        String randString = RandomStringUtils.random(5, "bcdfghjklmnpqrstvwxz0123456789");
+        String randString = RandomStringUtils.random(8, "bcdfghjklmnpqrstvwxz0123456789");
         return String.format("%s-%s", DEFAULT_AGENT_PREFIX, randString);
     }
 

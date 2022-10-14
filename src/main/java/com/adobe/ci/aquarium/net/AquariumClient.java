@@ -149,6 +149,11 @@ public class AquariumClient {
         return new ApplicationApi(api_client_pool.get(0)).applicationStateGet(app_id);
     }
 
+    public void applicationSnapshot(Long app_id, Boolean full) throws Exception {
+        startConnection();
+        new ApplicationApi(api_client_pool.get(0)).applicationSnapshotGet(app_id, full);
+    }
+
     public void applicationDeallocate(Long app_id) throws Exception {
         startConnection();
         new ApplicationApi(api_client_pool.get(0)).applicationDeallocateGet(app_id);
