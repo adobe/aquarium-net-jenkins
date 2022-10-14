@@ -76,7 +76,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
             node.setApplicationId(app.getID());
 
-            // Wait for agent connection
+            // Wait for fish node election process - it could take a while if there not enough resources in the pool
             SlaveComputer slaveComputer;
             ApplicationState state = null;
             while( true ) {
@@ -91,11 +91,11 @@ public class AquariumLauncher extends JNLPLauncher {
                 // Check that the resource hasn't failed already
                 try {
                     state = client.applicationStateGet(app.getID());
-                    if( state.getStatus() != ApplicationState.StatusEnum.ALLOCATED &&
-                            state.getStatus() != ApplicationState.StatusEnum.ELECTED &&
-                            state.getStatus() != ApplicationState.StatusEnum.NEW) {
+                    if( state.getStatus() == ApplicationState.StatusEnum.ALLOCATED ) {
+                        break;
+                    } else if( state.getStatus() != ApplicationState.StatusEnum.ELECTED && state.getStatus() != ApplicationState.StatusEnum.NEW) {
                         // Resource launch failed
-                        LOG.log(Level.WARNING, "Unable to allocate resource:" + state.getDescription() + ", node:" + comp.getName());
+                        LOG.log(Level.WARNING, "Unable to get resource from pool:" + state.getDescription() + ", node:" + comp.getName());
                         break;
                     }
                 } catch( ApiException e ) {
@@ -104,7 +104,37 @@ public class AquariumLauncher extends JNLPLauncher {
 
                 Thread.sleep(5000);
             }
+
+            // Wait for agent connection for 10 minutes
+            int wait_agent_connect = 120; // 120 * 5 - status_call_time >= 10 mins
+            for(int waited_for_agent = 0; waited_for_agent < wait_agent_connect; waited_for_agent++ ) {
+                slaveComputer = node.getComputer();
+                if( slaveComputer == null ) {
+                    throw new IllegalStateException("Node was deleted, computer is null");
+                }
+                if( slaveComputer.isOnline() ) {
+                    break;
+                }
+
+                // Check that the resource hasn't failed already
+                try {
+                    state = client.applicationStateGet(app.getID());
+                    if( state.getStatus() != ApplicationState.StatusEnum.ALLOCATED ) {
+                        LOG.log(Level.WARNING, "Agent did not connected:" + state.getDescription() + ", node:" + comp.getName());
+                        break;
+                    }
+                } catch( ApiException e ) {
+                    LOG.log(Level.WARNING, "Error happened during API request:" + e.toString() + ", node:" + comp.getName());
+                }
+
+                Thread.sleep(5000);
+            }
+
             if( slaveComputer.isOffline() ) {
+                if( node != null ) {
+                    // Clean up
+                    node.terminate();
+                }
                 throw new IllegalStateException("Agent is not connected, status:" + state.toString());
             }
 

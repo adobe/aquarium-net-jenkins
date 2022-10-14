@@ -12,6 +12,7 @@
 
 package com.adobe.ci.aquarium.net;
 
+import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -116,26 +117,28 @@ public class AquariumSlave extends AbstractCloudSlave {
 
     static String getSlaveName() {
         String randString = RandomStringUtils.random(5, "bcdfghjklmnpqrstvwxz0123456789");
-        return String.format("%s-%s", DEFAULT_AGENT_PREFIX,  randString);
+        return String.format("%s-%s", DEFAULT_AGENT_PREFIX, randString);
     }
 
     @Override
     protected void _terminate(TaskListener listener) throws IOException, InterruptedException {
-        LOG.log(Level.INFO, "Terminating Aquarium resource for agent {0}", name);
+        LOG.log(Level.INFO, "Terminating Aquarium resource for agent {0}", this.name);
 
         AquariumCloud cloud;
         try {
             cloud = getAquariumCloud();
         } catch (IllegalStateException e) {
-            e.printStackTrace(listener.fatalError("Unable to terminate agent. Cloud may have been removed. There may be leftover resources on the Aquarium cluster."));
-            LOG.log(Level.SEVERE, String.format("Unable to terminate agent %s. Cloud may have been removed. There may be leftover resources on the Aquarium cluster.", name));
+            String msg = String.format("Unable to terminate agent %s Application %d: %s. Cloud may have been removed." +
+                    " There may be leftover resources on the Aquarium cluster.", this.name, this.application_id, e);
+            e.printStackTrace(listener.fatalError(msg));
+            LOG.log(Level.SEVERE, msg);
             return;
         }
         cloud.onTerminate(this);
 
         Computer computer = toComputer();
         if (computer == null) {
-            String msg = String.format("Computer for agent is null: %s", name);
+            String msg = String.format("Computer for agent is null: %s", this.name);
             LOG.log(Level.SEVERE, msg);
             listener.fatalError(msg);
             return;
@@ -148,27 +151,38 @@ public class AquariumSlave extends AbstractCloudSlave {
             try {
                 disconnectorFuture.get(DISCONNECTION_TIMEOUT, TimeUnit.SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                String msg = String.format("Ignoring error sending order to not reconnect agent %s: %s", name, e.getMessage());
+                String msg = String.format("Ignoring error sending order to not reconnect agent %s: %s", this.name, e.getMessage());
                 LOG.log(Level.INFO, msg, e);
             }
         }
 
         if (getCloudName() == null) {
-            String msg = String.format("Cloud name is not set for agent, can't terminate: %s", name);
+            String msg = String.format("Cloud name is not set for agent, can't terminate: %s", this.name);
             LOG.log(Level.SEVERE, msg);
             listener.fatalError(msg);
             return;
         }
 
-        try {
-            if( this.application_id != null ) {
-                cloud.getClient().applicationDeallocate(this.application_id);
+        // Need to make sure the resource will be deallocated even if there will be some issues with network
+        while( true ) {
+            try {
+                if (this.application_id != null) {
+                    ApplicationState state = cloud.getClient().applicationStateGet(this.application_id);
+                    if( state.getStatus() != ApplicationState.StatusEnum.ALLOCATED
+                            && state.getStatus() != ApplicationState.StatusEnum.ELECTED
+                            && state.getStatus() != ApplicationState.StatusEnum.NEW ) {
+                        LOG.log(Level.SEVERE, "The Application is not active: " + state.getStatus());
+                        break;
+                    }
+                    cloud.getClient().applicationDeallocate(this.application_id);
+                }
+                break;
+            } catch (Exception e) {
+                String msg = String.format("Failed to remove resource from %s for agent %s Application %d: %s." +
+                        " Repeating...", getCloudName(), this.name, this.application_id, e);
+                e.printStackTrace(listener.fatalError(msg));
+                LOG.log(Level.SEVERE, msg);
             }
-        } catch (Exception e) {
-            String msg = String.format("Failed to remove resource from %s. There may be leftover resources on the Aquarium cluster.", getCloudName());
-            e.printStackTrace(listener.fatalError(msg));
-            LOG.log(Level.SEVERE, msg);
-            return;
         }
 
         String msg = String.format("Disconnected computer %s", name);
