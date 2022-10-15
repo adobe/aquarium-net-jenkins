@@ -29,6 +29,16 @@ in the cluster.
 Aquarium Fish cluster will decide which node can handle the resource request, run the resource and
 connect to the created agent node to serve the build needs.
 
+### Pipeline steps
+
+You can use the next steps in the pipeline:
+
+* `aquariumSnapshot()` (`full: false`)
+   Trigger the current Aquarium Application to snapshot the current state. What actually will be
+   captured really depends on the Label driver, but in general the rules are:
+     * `full: false` - partial snapshot, just the attached disks except for the root disk.
+     * `full: true` - full snapshot including root disk and, if possible, memory of the running env.
+
 ## Implementation
 
 The implementation is still PoC and not perfect in any way. For now it's mostly working.

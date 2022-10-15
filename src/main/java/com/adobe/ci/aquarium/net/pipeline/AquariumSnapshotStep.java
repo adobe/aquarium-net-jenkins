@@ -34,6 +34,8 @@ public class AquariumSnapshotStep extends Step implements Serializable {
 
     private boolean full = false;
 
+    @DataBoundConstructor public AquariumSnapshotStep() {}
+
     @DataBoundSetter
     public void setFull(boolean full) {
         this.full = full;
