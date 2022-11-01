@@ -22,6 +22,7 @@ import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
 
 import java.io.PrintStream;
+import java.util.UUID;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
@@ -64,7 +65,7 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
                         String.format("Node is not an Aquarium node: %s", node != null ? node.getNodeName() : null));
             }
 
-            Long app_id = ((AquariumSlave)node).getApplicationId();
+            UUID app_id = ((AquariumSlave)node).getApplicationUID();
             AquariumCloud cloud = ((AquariumSlave)node).getAquariumCloud();
 
             cloud.getClient().applicationSnapshot(app_id, full);

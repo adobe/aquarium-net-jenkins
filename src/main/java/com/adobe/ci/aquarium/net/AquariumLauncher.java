@@ -74,7 +74,7 @@ public class AquariumLauncher extends JNLPLauncher {
                     cloud.getMetadata()
             );
 
-            node.setApplicationId(app.getID());
+            node.setApplicationUID(app.getUID());
 
             // Wait for fish node election process - it could take a while if there not enough resources in the pool
             SlaveComputer slaveComputer;
@@ -90,7 +90,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
                 // Check that the resource hasn't failed already
                 try {
-                    state = client.applicationStateGet(app.getID());
+                    state = client.applicationStateGet(app.getUID());
                     if( state.getStatus() == ApplicationState.StatusEnum.ALLOCATED ) {
                         break;
                     } else if( state.getStatus() != ApplicationState.StatusEnum.ELECTED && state.getStatus() != ApplicationState.StatusEnum.NEW) {
@@ -118,7 +118,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
                 // Check that the resource hasn't failed already
                 try {
-                    state = client.applicationStateGet(app.getID());
+                    state = client.applicationStateGet(app.getUID());
                     if( state.getStatus() != ApplicationState.StatusEnum.ALLOCATED ) {
                         LOG.log(Level.WARNING, "Agent did not connected:" + state.getDescription() + ", node:" + comp.getName());
                         break;

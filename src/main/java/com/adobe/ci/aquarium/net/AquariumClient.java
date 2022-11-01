@@ -33,10 +33,7 @@ import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 public class AquariumClient {
     String node_url; // TODO: replace with nodes pool
@@ -139,24 +136,24 @@ public class AquariumClient {
 
         app.setMetadata(metadata);
         // Sorting the labels by version and using the max one
-        app.setLabelID(labels.stream().max(Comparator.comparing(l -> l.getVersion())).get().getID());
+        app.setLabelUID(labels.stream().max(Comparator.comparing(l -> l.getVersion())).get().getUID());
 
         return new ApplicationApi(api_client_pool.get(0)).applicationCreatePost(app);
     }
 
-    public ApplicationState applicationStateGet(Long app_id) throws Exception {
+    public ApplicationState applicationStateGet(UUID app_uid) throws Exception {
         startConnection();
-        return new ApplicationApi(api_client_pool.get(0)).applicationStateGet(app_id);
+        return new ApplicationApi(api_client_pool.get(0)).applicationStateGet(app_uid);
     }
 
-    public void applicationSnapshot(Long app_id, Boolean full) throws Exception {
+    public void applicationSnapshot(UUID app_uid, Boolean full) throws Exception {
         startConnection();
-        new ApplicationApi(api_client_pool.get(0)).applicationSnapshotGet(app_id, full);
+        new ApplicationApi(api_client_pool.get(0)).applicationSnapshotGet(app_uid, full);
     }
 
-    public void applicationDeallocate(Long app_id) throws Exception {
+    public void applicationDeallocate(UUID app_uid) throws Exception {
         startConnection();
-        new ApplicationApi(api_client_pool.get(0)).applicationDeallocateGet(app_id);
+        new ApplicationApi(api_client_pool.get(0)).applicationDeallocateGet(app_uid);
     }
 
     public User meGet() throws Exception {
