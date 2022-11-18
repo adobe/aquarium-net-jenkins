@@ -12,6 +12,7 @@
 
 package com.adobe.ci.aquarium.net;
 
+import com.adobe.ci.aquarium.fish.client.ApiException;
 import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
 import hudson.Extension;
 import hudson.FilePath;
@@ -32,6 +33,7 @@ import jenkins.security.MasterToSlaveCallable;
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
@@ -57,7 +59,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     private final String cloudName;
     private transient Set<Queue.Executable> executables = new HashSet<>();
 
-    private Long application_id;
+    private UUID application_uid;
 
     protected AquariumSlave(String name, String nodeDescription, String cloudName, String labelStr,
                             ComputerLauncher computerLauncher) throws Descriptor.FormException, IOException {
@@ -72,8 +74,8 @@ public class AquariumSlave extends AbstractCloudSlave {
         return cloudName;
     }
 
-    public Long getApplicationId() {
-        return this.application_id;
+    public UUID getApplicationUID() {
+        return this.application_uid;
     }
 
     @Override
@@ -104,8 +106,8 @@ public class AquariumSlave extends AbstractCloudSlave {
         return getAquariumCloud(getCloudName());
     }
 
-    public void setApplicationId(Long id) {
-        this.application_id = id;
+    public void setApplicationUID(UUID uid) {
+        this.application_uid = uid;
     }
 
     private static AquariumCloud getAquariumCloud(String cloudName) {
@@ -132,8 +134,8 @@ public class AquariumSlave extends AbstractCloudSlave {
         try {
             cloud = getAquariumCloud();
         } catch (IllegalStateException e) {
-            String msg = String.format("Unable to terminate agent %s Application %d: %s. Cloud may have been removed." +
-                    " There may be leftover resources on the Aquarium cluster.", this.name, this.application_id, e);
+            String msg = String.format("Unable to terminate agent %s Application %s: %s. Cloud may have been removed." +
+                    " There may be leftover resources on the Aquarium cluster.", this.name, this.application_uid, e);
             e.printStackTrace(listener.fatalError(msg));
             LOG.log(Level.SEVERE, msg);
             return;
@@ -170,22 +172,33 @@ public class AquariumSlave extends AbstractCloudSlave {
         // Need to make sure the resource will be deallocated even if there will be some issues with network
         while( true ) {
             try {
-                if (this.application_id != null) {
-                    ApplicationState state = cloud.getClient().applicationStateGet(this.application_id);
-                    if( state.getStatus() != ApplicationState.StatusEnum.ALLOCATED
+                if( this.application_uid != null ) {
+                    ApplicationState state = cloud.getClient().applicationStateGet(this.application_uid);
+                    if (state.getStatus() != ApplicationState.StatusEnum.ALLOCATED
                             && state.getStatus() != ApplicationState.StatusEnum.ELECTED
-                            && state.getStatus() != ApplicationState.StatusEnum.NEW ) {
+                            && state.getStatus() != ApplicationState.StatusEnum.NEW) {
                         LOG.log(Level.SEVERE, "The Application is not active: " + state.getStatus());
                         break;
                     }
-                    cloud.getClient().applicationDeallocate(this.application_id);
+                    cloud.getClient().applicationDeallocate(this.application_uid);
                 }
                 break;
-            } catch (Exception e) {
-                String msg = String.format("Failed to remove resource from %s for agent %s Application %d: %s." +
-                        " Repeating...", getCloudName(), this.name, this.application_id, e);
+            } catch( ApiException e ) {
+                if( e.getCode() == 404 ) {
+                    String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s.",
+                            getCloudName(), this.name, this.application_uid, e);
+                    LOG.log(Level.SEVERE, msg);
+                    break;
+                }
+                String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s." +
+                        " Repeating...", getCloudName(), this.name, this.application_uid, e);
+                LOG.log(Level.SEVERE, msg);
+            } catch( Exception e ) {
+                String msg = String.format("Error during remove resource from %s for agent %s Application %s: %s.",
+                        getCloudName(), this.name, this.application_uid, e);
                 e.printStackTrace(listener.fatalError(msg));
                 LOG.log(Level.SEVERE, msg);
+                break;
             }
         }
 
@@ -218,6 +231,7 @@ public class AquariumSlave extends AbstractCloudSlave {
         return new AquariumComputer(this);
     }
 
+    @NotNull
     @Override
     public Launcher createLauncher(TaskListener listener) {
         Launcher launcher = super.createLauncher(listener);
