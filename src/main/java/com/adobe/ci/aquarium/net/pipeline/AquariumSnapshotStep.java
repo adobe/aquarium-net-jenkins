@@ -12,10 +12,9 @@
 
 package com.adobe.ci.aquarium.net.pipeline;
 
+import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
 import hudson.Extension;
-import hudson.FilePath;
 import hudson.model.Node;
-import hudson.model.TaskListener;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -33,6 +32,7 @@ public class AquariumSnapshotStep extends Step implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private boolean full = false;
+    private ApplicationStatus when = ApplicationStatus.ALLOCATED;
 
     @DataBoundConstructor public AquariumSnapshotStep() {}
 
@@ -41,8 +41,21 @@ public class AquariumSnapshotStep extends Step implements Serializable {
         this.full = full;
     }
 
+    @DataBoundSetter
+    public void setWhen(String status) {
+        if( status != "" ) {
+            this.when = ApplicationStatus.fromValue(status);
+        } else {
+            this.when = ApplicationStatus.ALLOCATED;
+        }
+    }
+
     public boolean isFull() {
         return this.full;
+    }
+
+    public ApplicationStatus getWhen() {
+        return this.when;
     }
 
     @Override

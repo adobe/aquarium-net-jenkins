@@ -12,6 +12,7 @@
 
 package com.adobe.ci.aquarium.net.pipeline;
 
+import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
 import com.adobe.ci.aquarium.net.AquariumCloud;
 import hudson.model.TaskListener;
 import hudson.util.LogTaskListener;
@@ -55,6 +56,7 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
     @Override
     protected String run() throws Exception {
         boolean full = step.isFull();
+        ApplicationStatus when = step.getWhen();
 
         try {
             LOGGER.log(Level.FINE, "Starting containerLog step.");
@@ -68,7 +70,7 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
             UUID app_id = ((AquariumSlave)node).getApplicationUID();
             AquariumCloud cloud = ((AquariumSlave)node).getAquariumCloud();
 
-            cloud.getClient().applicationSnapshot(app_id, full);
+            cloud.getClient().applicationTaskSnapshot(app_id, when, full);
 
             return "";
         } catch (InterruptedException e) {

@@ -16,10 +16,7 @@ import com.adobe.ci.aquarium.fish.client.ApiClient;
 import com.adobe.ci.aquarium.fish.client.api.ApplicationApi;
 import com.adobe.ci.aquarium.fish.client.api.LabelApi;
 import com.adobe.ci.aquarium.fish.client.api.UserApi;
-import com.adobe.ci.aquarium.fish.client.model.Application;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
-import com.adobe.ci.aquarium.fish.client.model.Label;
-import com.adobe.ci.aquarium.fish.client.model.User;
+import com.adobe.ci.aquarium.fish.client.model.*;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
@@ -106,12 +103,16 @@ public class AquariumClient {
         return new LabelApi(api_client_pool.get(0)).labelListGet("name='" + StringEscapeUtils.escapeSql(name) + "'");
     }
 
-    public Application applicationCreate(String label_name, String jenkins_url, String agent_name, String agent_secret, String add_metadata) throws Exception {
+    public Label labelFindLatest(String name) throws Exception {
         // TODO: not actually optimal to get all the labels, better the latest and only ID.
-        List<Label> labels = labelFind(label_name);
+        List<Label> labels = labelFind(name);
         if( labels.isEmpty() )
-            throw new Exception("Application create unable find label " + label_name);
+            throw new Exception("Application create unable find label " + name);
 
+        return labels.stream().max(Comparator.comparing(l -> l.getVersion())).get();
+    }
+
+    public Application applicationCreate(UUID label_uid, String jenkins_url, String agent_name, String agent_secret, String add_metadata) throws Exception {
         Application app = new Application();
 
         JSONObject metadata = new JSONObject();
@@ -136,7 +137,7 @@ public class AquariumClient {
 
         app.setMetadata(metadata);
         // Sorting the labels by version and using the max one
-        app.setLabelUID(labels.stream().max(Comparator.comparing(l -> l.getVersion())).get().getUID());
+        app.setLabelUID(label_uid);
 
         return new ApplicationApi(api_client_pool.get(0)).applicationCreatePost(app);
     }
@@ -146,9 +147,18 @@ public class AquariumClient {
         return new ApplicationApi(api_client_pool.get(0)).applicationStateGet(app_uid);
     }
 
-    public void applicationSnapshot(UUID app_uid, Boolean full) throws Exception {
+    public Resource applicationResourceGet(UUID app_uid) throws Exception {
         startConnection();
-        new ApplicationApi(api_client_pool.get(0)).applicationSnapshotGet(app_uid, full);
+        return new ApplicationApi(api_client_pool.get(0)).applicationResourceGet(app_uid);
+    }
+
+    public void applicationTaskSnapshot(UUID app_uid, ApplicationStatus when, Boolean full) throws Exception {
+        startConnection();
+        ApplicationTask task = new ApplicationTask();
+        task.setTask("snapshot");
+        task.setWhen(when);
+        task.setOptions(Collections.singletonMap("full", full));
+        new ApplicationApi(api_client_pool.get(0)).applicationTaskCreatePost(app_uid, task);
     }
 
     public void applicationDeallocate(UUID app_uid) throws Exception {
