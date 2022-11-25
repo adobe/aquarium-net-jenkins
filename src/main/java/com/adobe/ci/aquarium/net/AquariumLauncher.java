@@ -76,8 +76,9 @@ public class AquariumLauncher extends JNLPLauncher {
 
             node.setApplicationUID(app.getUID());
 
-            // Notify task that the request for Application was sent
+            // Notify computer log that the request for Application was sent
             listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + "#" + label.getVersion());
+            comp.setAppInfo("Application: " + app.getUID() + ", Label: " + label.getName() + "#" + label.getVersion());
 
             // Wait for fish node election process - it could take a while if there is not enough resources in the pool
             SlaveComputer slaveComputer;
@@ -108,10 +109,11 @@ public class AquariumLauncher extends JNLPLauncher {
                 Thread.sleep(5000);
             }
 
-            // Print to the task log about the LabelDefinition was chosen
+            // Print to the computer log about the LabelDefinition was chosen
             Resource res = client.applicationResourceGet(app.getUID());
-            if( label.getDefinitions().size() < res.getDefinitionIndex() ) // Should always be true, but who knows...
-                listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
+            listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
+            // Tell computer to know where it runs
+            comp.setDefinitionInfo(label.getDefinitions().get(res.getDefinitionIndex()).toString());
 
             // Wait for agent connection for 10 minutes
             int wait_agent_connect = 120; // 120 * 5 - status_call_time >= 10 mins

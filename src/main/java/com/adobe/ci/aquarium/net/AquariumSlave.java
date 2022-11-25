@@ -187,12 +187,12 @@ public class AquariumSlave extends AbstractCloudSlave {
             } catch( ApiException e ) {
                 if( e.getCode() == 404 ) {
                     String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s.",
-                            getCloudName(), this.name, this.application_uid, e);
+                            getCloudName(), this.name, this.application_uid, e.getMessage());
                     LOG.log(Level.SEVERE, msg);
                     break;
                 }
                 String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s." +
-                        " Repeating...", getCloudName(), this.name, this.application_uid, e);
+                        " Repeating...", getCloudName(), this.name, this.application_uid, e.getMessage());
                 LOG.log(Level.SEVERE, msg);
             } catch( Exception e ) {
                 String msg = String.format("Error during remove resource from %s for agent %s Application %s: %s.",
