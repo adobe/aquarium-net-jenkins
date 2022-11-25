@@ -15,10 +15,14 @@ package com.adobe.ci.aquarium.net;
 import hudson.model.Computer;
 import hudson.model.Executor;
 import hudson.model.Queue;
+import hudson.model.queue.SubTask;
 import hudson.security.ACL;
 import hudson.security.Permission;
 import hudson.slaves.AbstractCloudComputer;
 import org.acegisecurity.Authentication;
+import org.jenkinsci.plugins.workflow.support.steps.ExecutorStepExecution.PlaceholderTask;
+
+import java.io.PrintStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -27,8 +31,19 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
 
     private boolean launching;
 
+    private String app_info;
+    private String definition_info;
+
     public AquariumComputer(AquariumSlave slave) {
         super(slave);
+    }
+
+    public void setAppInfo(String info) {
+        this.app_info = info;
+    }
+
+    public void setDefinitionInfo(String info) {
+        this.definition_info = info;
     }
 
     @Override
@@ -36,6 +51,26 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
         super.taskAccepted(executor, task);
         Queue.Executable exec = executor.getCurrentExecutable();
         LOG.log(Level.INFO, " Computer {0} accepted task {1}", new Object[] {this, exec});
+
+        // Tell the current workflow about the node we're executing on
+        // Not that great solution - will be better to use the node step listener somehow, but I did not found a way to do that
+        try {
+            SubTask parent = exec.getParent();
+            if( parent instanceof PlaceholderTask ) {
+                PlaceholderTask wf_run = (PlaceholderTask) parent;
+                PrintStream logger = wf_run.getNode().getExecution().getOwner().getListener().getLogger();
+                if( this.app_info != "" ) {
+                    logger.println("Aquarium Application: " + this.app_info);
+                }
+                if( this.definition_info != "" ) {
+                    logger.println("Aquarium Definition: " + this.definition_info);
+                }
+            } else {
+                LOG.log(Level.WARNING, "Incorrect definition or executor to notify: Aquarium LabelDefinition: " + this.definition_info);
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Unable to notify task about node resource: Aquarium LabelDefinition: " + this.definition_info);
+        }
     }
 
     @Override

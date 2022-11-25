@@ -13,8 +13,7 @@
 package com.adobe.ci.aquarium.net;
 
 import com.adobe.ci.aquarium.fish.client.ApiException;
-import com.adobe.ci.aquarium.fish.client.model.Application;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
+import com.adobe.ci.aquarium.fish.client.model.*;
 import com.google.common.base.Throwables;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.model.TaskListener;
@@ -66,8 +65,9 @@ public class AquariumLauncher extends JNLPLauncher {
             // Request for resource
             AquariumCloud cloud = node.getAquariumCloud();
             AquariumClient client = cloud.getClient();
+            Label label = client.labelFindLatest(node.getLabelString().split(" ")[0]);
             Application app = client.applicationCreate(
-                    node.getLabelString().split(" ")[0], // Using the first label in the list
+                    label.getUID(),
                     cloud.getJenkinsUrl(),
                     node.getNodeName(),
                     comp.getJnlpMac(),
@@ -76,7 +76,11 @@ public class AquariumLauncher extends JNLPLauncher {
 
             node.setApplicationUID(app.getUID());
 
-            // Wait for fish node election process - it could take a while if there not enough resources in the pool
+            // Notify computer log that the request for Application was sent
+            listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + "#" + label.getVersion());
+            comp.setAppInfo("Application: " + app.getUID() + ", Label: " + label.getName() + "#" + label.getVersion());
+
+            // Wait for fish node election process - it could take a while if there is not enough resources in the pool
             SlaveComputer slaveComputer;
             ApplicationState state = null;
             while( true ) {
@@ -91,19 +95,25 @@ public class AquariumLauncher extends JNLPLauncher {
                 // Check that the resource hasn't failed already
                 try {
                     state = client.applicationStateGet(app.getUID());
-                    if( state.getStatus() == ApplicationState.StatusEnum.ALLOCATED ) {
+                    if( state.getStatus() == ApplicationStatus.ALLOCATED ) {
                         break;
-                    } else if( state.getStatus() != ApplicationState.StatusEnum.ELECTED && state.getStatus() != ApplicationState.StatusEnum.NEW) {
+                    } else if( state.getStatus() != ApplicationStatus.ELECTED && state.getStatus() != ApplicationStatus.NEW) {
                         // Resource launch failed
                         LOG.log(Level.WARNING, "Unable to get resource from pool:" + state.getDescription() + ", node:" + comp.getName());
                         break;
                     }
                 } catch( ApiException e ) {
-                    LOG.log(Level.WARNING, "Error happened during API request:" + e.toString() + ", node:" + comp.getName());
+                    LOG.log(Level.WARNING, "Error happened during API request:" + e + ", node:" + comp.getName());
                 }
 
                 Thread.sleep(5000);
             }
+
+            // Print to the computer log about the LabelDefinition was chosen
+            Resource res = client.applicationResourceGet(app.getUID());
+            listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
+            // Tell computer to know where it runs
+            comp.setDefinitionInfo(label.getDefinitions().get(res.getDefinitionIndex()).toString());
 
             // Wait for agent connection for 10 minutes
             int wait_agent_connect = 120; // 120 * 5 - status_call_time >= 10 mins
@@ -119,12 +129,12 @@ public class AquariumLauncher extends JNLPLauncher {
                 // Check that the resource hasn't failed already
                 try {
                     state = client.applicationStateGet(app.getUID());
-                    if( state.getStatus() != ApplicationState.StatusEnum.ALLOCATED ) {
+                    if( state.getStatus() != ApplicationStatus.ALLOCATED ) {
                         LOG.log(Level.WARNING, "Agent did not connected:" + state.getDescription() + ", node:" + comp.getName());
                         break;
                     }
                 } catch( ApiException e ) {
-                    LOG.log(Level.WARNING, "Error happened during API request:" + e.toString() + ", node:" + comp.getName());
+                    LOG.log(Level.WARNING, "Error happened during API request:" + e + ", node:" + comp.getName());
                 }
 
                 Thread.sleep(5000);
@@ -140,6 +150,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
             // Set up the retention strategy to destroy the node when it's completed processes
             node.setRetentionStrategy(new OnceRetentionStrategy(5));
+
             computer.setAcceptingTasks(true);
             launched = true;
 

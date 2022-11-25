@@ -14,6 +14,7 @@ package com.adobe.ci.aquarium.net;
 
 import com.adobe.ci.aquarium.fish.client.ApiException;
 import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
+import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -174,9 +175,9 @@ public class AquariumSlave extends AbstractCloudSlave {
             try {
                 if( this.application_uid != null ) {
                     ApplicationState state = cloud.getClient().applicationStateGet(this.application_uid);
-                    if (state.getStatus() != ApplicationState.StatusEnum.ALLOCATED
-                            && state.getStatus() != ApplicationState.StatusEnum.ELECTED
-                            && state.getStatus() != ApplicationState.StatusEnum.NEW) {
+                    if (state.getStatus() != ApplicationStatus.ALLOCATED
+                            && state.getStatus() != ApplicationStatus.ELECTED
+                            && state.getStatus() != ApplicationStatus.NEW) {
                         LOG.log(Level.SEVERE, "The Application is not active: " + state.getStatus());
                         break;
                     }
@@ -186,12 +187,12 @@ public class AquariumSlave extends AbstractCloudSlave {
             } catch( ApiException e ) {
                 if( e.getCode() == 404 ) {
                     String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s.",
-                            getCloudName(), this.name, this.application_uid, e);
+                            getCloudName(), this.name, this.application_uid, e.getMessage());
                     LOG.log(Level.SEVERE, msg);
                     break;
                 }
                 String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s." +
-                        " Repeating...", getCloudName(), this.name, this.application_uid, e);
+                        " Repeating...", getCloudName(), this.name, this.application_uid, e.getMessage());
                 LOG.log(Level.SEVERE, msg);
             } catch( Exception e ) {
                 String msg = String.format("Error during remove resource from %s for agent %s Application %s: %s.",

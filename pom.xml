@@ -11,7 +11,7 @@
 
     <groupId>com.adobe.ci.aquarium</groupId>
     <artifactId>aquarium-net-jenkins</artifactId>
-    <version>0.3.1-SNAPSHOT</version>
+    <version>0.4.1-SNAPSHOT</version>
     <packaging>hpi</packaging>
     <name>Aquarium Net Jenkins Plugin</name>
     <description>Dynamically allocates required resources from Aquarium Fish cluster nodes</description>
@@ -41,7 +41,7 @@
     </profiles>
 
     <properties>
-        <jenkins.version>2.222.4</jenkins.version>
+        <jenkins.version>2.248</jenkins.version>
         <java.level>8</java.level>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <guice.version>3.0</guice.version>
@@ -51,7 +51,7 @@
             Eventually, want to make this dynamic so it pulls a selectable yaml file to generate from, generated from aquarium-fish server project.
             Need to define that flow, whether use git or put yaml in jar files, etc. TBD.
         -->
-        <aquarium-fish.openapi.spec.path>https://github.com/adobe/aquarium-fish/raw/master/docs/openapi.yaml</aquarium-fish.openapi.spec.path>
+        <aquarium-fish.openapi.spec.path>https://raw.githubusercontent.com/adobe/aquarium-fish/main/docs/openapi.yaml</aquarium-fish.openapi.spec.path>
 
         <swagger-core-version>1.6.2</swagger-core-version>
         <okio-version>2.10.0</okio-version>
@@ -78,12 +78,21 @@
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
             <artifactId>workflow-step-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-durable-task-step</artifactId>
+        </dependency>
 
         <!-- OpenAPI deps -->
         <dependency>
             <groupId>io.swagger</groupId>
             <artifactId>swagger-annotations</artifactId>
             <version>${swagger-core-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openapitools</groupId>
+            <artifactId>jackson-databind-nullable</artifactId>
+            <version>0.2.4</version>
         </dependency>
         <!-- Okio versions separate from okhttp and we want to pull in later versions -->
         <dependency>
@@ -142,7 +151,7 @@
             <plugin>
                 <groupId>org.openapitools</groupId>
                 <artifactId>openapi-generator-maven-plugin</artifactId>
-                <version>5.1.0</version>
+                <version>5.4.0</version>
                 <executions>
                     <execution>
                         <goals>
@@ -159,7 +168,7 @@
                             <apiPackage>com.adobe.ci.aquarium.fish.client.api</apiPackage>
                             <modelPackage>com.adobe.ci.aquarium.fish.client.model</modelPackage>
 
-                            <httpUserAgent>${artifactId}/${version}/java</httpUserAgent>
+                            <httpUserAgent>${project.artifactId}/${project.version}/java</httpUserAgent>
                         </configuration>
                     </execution>
                 </executions>
