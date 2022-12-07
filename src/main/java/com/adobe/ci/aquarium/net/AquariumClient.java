@@ -98,6 +98,11 @@ public class AquariumClient {
         return c;
     }
 
+    public List<Label> labelGet() throws Exception {
+        startConnection();
+        return new LabelApi(api_client_pool.get(0)).labelListGet(null);
+    }
+
     public List<Label> labelFind(String name) throws Exception {
         startConnection();
         return new LabelApi(api_client_pool.get(0)).labelListGet("name='" + StringEscapeUtils.escapeSql(name) + "'");

@@ -117,7 +117,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
             // Wait for agent connection for 10 minutes
             int wait_agent_connect = 120; // 120 * 5 - status_call_time >= 10 mins
-            for(int waited_for_agent = 0; waited_for_agent < wait_agent_connect; waited_for_agent++ ) {
+            for( int waited_for_agent = 0; waited_for_agent < wait_agent_connect; waited_for_agent++ ) {
                 slaveComputer = node.getComputer();
                 if( slaveComputer == null ) {
                     throw new IllegalStateException("Node was deleted, computer is null");
