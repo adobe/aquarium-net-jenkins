@@ -12,7 +12,6 @@
 
 package com.adobe.ci.aquarium.net;
 
-import com.adobe.ci.aquarium.fish.client.ApiException;
 import com.adobe.ci.aquarium.fish.client.model.User;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;

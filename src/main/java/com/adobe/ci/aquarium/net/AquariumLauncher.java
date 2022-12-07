@@ -19,6 +19,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.model.TaskListener;
 import hudson.slaves.JNLPLauncher;
 import hudson.slaves.SlaveComputer;
+import net.sf.json.JSONObject;
 import org.jenkinsci.plugins.durabletask.executors.OnceRetentionStrategy;
 import org.kohsuke.stapler.DataBoundConstructor;
 
@@ -78,7 +79,11 @@ public class AquariumLauncher extends JNLPLauncher {
 
             // Notify computer log that the request for Application was sent
             listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + "#" + label.getVersion());
-            comp.setAppInfo("Application: " + app.getUID() + ", Label: " + label.getName() + "#" + label.getVersion());
+            JSONObject app_info = new JSONObject();
+            app_info.put("ApplicationUID", app.getUID().toString());
+            app_info.put("LabelName", label.getName());
+            app_info.put("LabelVersion", label.getVersion());
+            comp.setAppInfo(app_info);
 
             // Wait for fish node election process - it could take a while if there is not enough resources in the pool
             SlaveComputer slaveComputer;
@@ -113,7 +118,7 @@ public class AquariumLauncher extends JNLPLauncher {
             Resource res = client.applicationResourceGet(app.getUID());
             listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
             // Tell computer to know where it runs
-            comp.setDefinitionInfo(label.getDefinitions().get(res.getDefinitionIndex()).toString());
+            comp.setDefinitionInfo(JSONObject.fromObject(label.getDefinitions().get(res.getDefinitionIndex())));
 
             // Wait for agent connection for 10 minutes
             int wait_agent_connect = 120; // 120 * 5 - status_call_time >= 10 mins
