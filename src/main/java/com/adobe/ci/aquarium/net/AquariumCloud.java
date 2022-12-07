@@ -22,6 +22,7 @@ import com.google.common.util.concurrent.Futures;
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.*;
+import hudson.model.labels.LabelAtom;
 import hudson.security.ACL;
 import hudson.slaves.Cloud;
 import hudson.slaves.NodeProvisioner.PlannedNode;
@@ -61,6 +62,10 @@ public class AquariumCloud extends Cloud {
     private String jenkinsUrl;
     private String metadata;
     private List<LabelMapping> labelMappings = new ArrayList<>();
+
+    // A collection of labels supported by the Auqarium Fish cluster
+    private Set<LabelAtom> labelsCached;
+    private long labelsCachedUpdateTime = 0;
 
     @DataBoundConstructor
     public AquariumCloud(String name) {
@@ -134,16 +139,42 @@ public class AquariumCloud extends Cloud {
 
     @Override
     public boolean canProvision(Label label) {
-        LOG.log(Level.INFO, "Can provision label? : " + label.getName());
-        // TODO: Better to use some caching here, otherwise some lost
-        // connection tells jenkins to not use this cloud anymore
+        LOG.log(Level.INFO, "Can provision label expression? : " + label.toString());
         try {
-            return !(this.getClient().labelFind(label.getName()).isEmpty());
+            // Update the cache if time has come
+            if( this.labelsCachedUpdateTime < System.currentTimeMillis() ) {
+                this.updateLabelsCache();
+            }
+
+            // Simple comparison by label name
+            if( this.labelsCached.contains(label) )
+                return true;
+
+            // Match of the label expression
+            return label.matches(this.labelsCached);
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         return false;
+    }
+
+    public void updateLabelsCache() throws Exception {
+        // Request all the labels supported by the cluster
+        Set<LabelAtom> out = new HashSet<>();
+        this.getClient().labelGet().forEach(label -> {
+            out.add(LabelAtom.get(label.getName()));
+        });
+
+        if( out.size() == 0 ) {
+            LOG.log(Level.WARNING, "Cluster contains no labels - empty list was returned");
+        }
+
+        // Replace the cached labels with newly received
+        this.labelsCached = out;
+
+        // Set the next labels update cache time to 30 mins from now
+        this.labelsCachedUpdateTime = System.currentTimeMillis() + 1800000;
     }
 
     private PlannedNode buildAgent(String label) {
@@ -182,16 +213,29 @@ public class AquariumCloud extends Cloud {
 
     @Override
     public Collection<PlannedNode> provision(Label label, int excessWorkload) {
-        LOG.log(Level.INFO, "Execute provision : " + label.getName() + ", workload: " + excessWorkload);
+        LOG.log(Level.INFO, "Execute provision : " + label.toString() + ", workload: " + excessWorkload);
 
         Set<String> allInProvisioning = getInProvisioning(label); // Nodes being launched
         LOG.log(Level.INFO, () -> "In provisioning : " + allInProvisioning);
         int toBeProvisioned = Math.max(0, excessWorkload - allInProvisioning.size());
         LOG.log(Level.INFO, "Label \"{0}\" excess workload: {1}", new Object[] {label, toBeProvisioned});
 
+        // Find first label that is matching to the requested expression
+        String label_name = "";
+        Set<LabelAtom> set = new HashSet<LabelAtom>();
+        for( LabelAtom l : this.labelsCached ) {
+            set.clear();
+            set.add(l);
+            if( label.matches(set) ) {
+                label_name = l.getName();
+                break;
+            }
+        }
+        LOG.log(Level.INFO, "Chosen label : " + label_name);
+
         List<PlannedNode> plannedNodes = new ArrayList<>();
-        while (toBeProvisioned > 0/* && Limits */) {
-            plannedNodes.add(buildAgent(label.getName()));
+        while( toBeProvisioned > 0 /* && Limits */ ) {
+            plannedNodes.add(buildAgent(label_name));
             toBeProvisioned--;
         }
         return plannedNodes;

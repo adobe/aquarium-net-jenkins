@@ -41,6 +41,17 @@ You can use the next steps in the pipeline:
      * `full: false` - partial snapshot, just the attached disks except for the root disk.
      * `full: true` - full snapshot including root disk and, if possible, memory of the running env.
 
+* `aquariumNodeInfo()`
+   Returns info about the currently running node in which the step is executed. Useful if your
+   pipeline wants to store it somewhere or use in the logic. The format is:
+   ```yaml
+   ApplicationInfo:
+     ApplicationUID: "<UUID>"
+     LabelName: "<name>"
+     LabelVersion: <version>
+   DefinitionInfo:  # See LabelDefinition in fish openapi yaml
+   ```
+
 ## Implementation
 
 The implementation is still PoC and not perfect in any way. For now it's mostly working.

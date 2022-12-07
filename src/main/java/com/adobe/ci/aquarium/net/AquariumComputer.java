@@ -19,6 +19,7 @@ import hudson.model.queue.SubTask;
 import hudson.security.ACL;
 import hudson.security.Permission;
 import hudson.slaves.AbstractCloudComputer;
+import net.sf.json.JSONObject;
 import org.acegisecurity.Authentication;
 import org.jenkinsci.plugins.workflow.support.steps.ExecutorStepExecution.PlaceholderTask;
 
@@ -31,19 +32,26 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
 
     private boolean launching;
 
-    private String app_info;
-    private String definition_info;
+    private JSONObject appInfo;
+    private JSONObject definitionInfo;
 
     public AquariumComputer(AquariumSlave slave) {
         super(slave);
     }
 
-    public void setAppInfo(String info) {
-        this.app_info = info;
+    public JSONObject getAppInfo() {
+        return this.appInfo;
+    }
+    public JSONObject getDefinitionInfo() {
+        return this.definitionInfo;
     }
 
-    public void setDefinitionInfo(String info) {
-        this.definition_info = info;
+    public void setAppInfo(JSONObject info) {
+        this.appInfo = info;
+    }
+
+    public void setDefinitionInfo(JSONObject info) {
+        this.definitionInfo = info;
     }
 
     @Override
@@ -59,17 +67,17 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
             if( parent instanceof PlaceholderTask ) {
                 PlaceholderTask wf_run = (PlaceholderTask) parent;
                 PrintStream logger = wf_run.getNode().getExecution().getOwner().getListener().getLogger();
-                if( this.app_info != "" ) {
-                    logger.println("Aquarium Application: " + this.app_info);
+                if( !this.appInfo.isEmpty() ) {
+                    logger.println("Aquarium Application: " + this.appInfo);
                 }
-                if( this.definition_info != "" ) {
-                    logger.println("Aquarium Definition: " + this.definition_info);
+                if( !this.definitionInfo.isEmpty() ) {
+                    logger.println("Aquarium Definition: " + this.definitionInfo);
                 }
             } else {
-                LOG.log(Level.WARNING, "Incorrect definition or executor to notify: Aquarium LabelDefinition: " + this.definition_info);
+                LOG.log(Level.WARNING, "Incorrect definition or executor to notify: Aquarium LabelDefinition: " + this.definitionInfo);
             }
         } catch (Exception e) {
-            LOG.log(Level.WARNING, "Unable to notify task about node resource: Aquarium LabelDefinition: " + this.definition_info);
+            LOG.log(Level.WARNING, "Unable to notify task about node resource: Aquarium LabelDefinition: " + this.definitionInfo);
         }
     }
 
