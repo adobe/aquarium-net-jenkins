@@ -11,4 +11,7 @@
     <f:entry field="full" title="Make full environment snapshot">
         <f:checkbox/>
     </f:entry>
+    <f:entry field="when" title="When to execute the snapshot operation">
+        <f:select/>
+    </f:entry>
 </j:jelly>
