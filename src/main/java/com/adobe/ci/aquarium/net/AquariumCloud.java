@@ -138,7 +138,8 @@ public class AquariumCloud extends Cloud {
     }
 
     @Override
-    public boolean canProvision(Label label) {
+    public boolean canProvision(CloudState state) {
+        Label label = state.getLabel();
         LOG.log(Level.INFO, "Can provision label expression? : " + label.toString());
         try {
             // Update the cache if time has come
@@ -212,13 +213,23 @@ public class AquariumCloud extends Cloud {
     }
 
     @Override
-    public Collection<PlannedNode> provision(Label label, int excessWorkload) {
-        LOG.log(Level.INFO, "Execute provision : " + label.toString() + ", workload: " + excessWorkload);
+    public Collection<PlannedNode> provision(CloudState state, int excessWorkload) {
+        List<PlannedNode> plannedNodes = new ArrayList<>();
 
+        Label label = state.getLabel();
+        LOG.log(Level.INFO, "Execute provision : " + label.toString() + ", requested amount: " + excessWorkload);
+
+        // Check if there is already enough provisioned nodes to cover the need of the queue to not overshoot the demand
+        // Unfortunately jenkins can request much more agents than needed - but with Aquarium it's not up to Jenkins
+        // anymore to decide on this matter, because it's not the resource manager anymore. So we need to allocate only
+        // the actually required amount of resources for the provided label.
         Set<String> allInProvisioning = getInProvisioning(label); // Nodes being launched
-        LOG.log(Level.INFO, () -> "In provisioning : " + allInProvisioning);
-        int toBeProvisioned = Math.max(0, excessWorkload - allInProvisioning.size());
-        LOG.log(Level.INFO, "Label \"{0}\" excess workload: {1}", new Object[] {label, toBeProvisioned});
+        int actualExcessWorkload = Jenkins.get().getQueue().countBuildableItemsFor(label);
+        int toBeProvisioned = Math.min(excessWorkload, actualExcessWorkload - allInProvisioning.size());
+        if( toBeProvisioned <= 0 )
+            return plannedNodes; // No need to provision anything
+
+        LOG.log(Level.INFO, "In provisioning : " + allInProvisioning + " and we need to add: " + toBeProvisioned + "(total required: " + actualExcessWorkload + ")");
 
         // Find first label that is matching to the requested expression
         String label_name = "";
@@ -233,7 +244,6 @@ public class AquariumCloud extends Cloud {
         }
         LOG.log(Level.INFO, "Chosen label : " + label_name);
 
-        List<PlannedNode> plannedNodes = new ArrayList<>();
         while( toBeProvisioned > 0 /* && Limits */ ) {
             plannedNodes.add(buildAgent(label_name));
             toBeProvisioned--;

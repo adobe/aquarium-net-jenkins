@@ -153,7 +153,8 @@ public class AquariumLauncher extends JNLPLauncher {
                 throw new IllegalStateException("Agent is not connected, status:" + state.toString());
             }
 
-            // Set up the retention strategy to destroy the node when it's completed processes
+            // Set up the retention strategy to destroy the node when it's completed processes, idle will initiate the
+            // agent termination if no workload was assigned to it.
             node.setRetentionStrategy(new OnceRetentionStrategy(5));
 
             computer.setAcceptingTasks(true);
