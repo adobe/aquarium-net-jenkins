@@ -15,6 +15,7 @@ package com.adobe.ci.aquarium.net.pipeline;
 import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
 import hudson.Extension;
 import hudson.model.Node;
+import hudson.util.ListBoxModel;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -84,6 +85,14 @@ public class AquariumSnapshotStep extends Step implements Serializable {
         @Override
         public Set<? extends Class<?>> getRequiredContext() {
             return Collections.unmodifiableSet(new HashSet<>(Arrays.asList(Node.class)));
+        }
+
+        // Used to fill the pipeline step snippet generator `when` field
+        public ListBoxModel doFillWhenItems() {
+            ListBoxModel items = new ListBoxModel();
+            items.add(ApplicationStatus.ALLOCATED.name());
+            items.add(ApplicationStatus.DEALLOCATE.name());
+            return items;
         }
     }
 }
