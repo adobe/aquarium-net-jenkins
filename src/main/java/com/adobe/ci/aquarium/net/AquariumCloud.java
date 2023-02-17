@@ -138,8 +138,7 @@ public class AquariumCloud extends Cloud {
     }
 
     @Override
-    public boolean canProvision(CloudState state) {
-        Label label = state.getLabel();
+    public boolean canProvision(Label label) {
         LOG.log(Level.INFO, "Can provision label expression? : " + label.toString());
         try {
             // Update the cache if time has come
@@ -179,19 +178,19 @@ public class AquariumCloud extends Cloud {
     }
 
     private PlannedNode buildAgent(String label) {
-        Future f;
+        Future<Node> future;
         String displayName;
         try {
             // Make sure the aquarium requested label is first in the label list
             AquariumSlave agent = AquariumSlave.builder().cloud(this)
                     .addLabel(label).addLabel(LabelMapping.getLabels(this.labelMappings, label)).build();
             displayName = agent.getDisplayName();
-            f = Futures.immediateFuture(agent);
+            future = Futures.immediateFuture(agent);
         } catch (IOException | Descriptor.FormException e) {
             displayName = null;
-            f = Futures.immediateFailedFuture(e);
+            future = Futures.immediateFailedFuture(e);
         }
-        return new PlannedNode(Util.fixNull(displayName), f, 1);
+        return new PlannedNode(Util.fixNull(displayName), future, 1);
     }
 
     private static boolean isNotAcceptingTasks(Node n) {
@@ -213,10 +212,9 @@ public class AquariumCloud extends Cloud {
     }
 
     @Override
-    public Collection<PlannedNode> provision(CloudState state, int excessWorkload) {
+    public Collection<PlannedNode> provision(Label label, int excessWorkload) {
         List<PlannedNode> plannedNodes = new ArrayList<>();
 
-        Label label = state.getLabel();
         LOG.log(Level.INFO, "Execute provision : " + label.toString() + ", requested amount: " + excessWorkload);
 
         // Check if there is already enough provisioned nodes to cover the need of the queue to not overshoot the demand

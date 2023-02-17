@@ -7,7 +7,7 @@ to allocate the required resources on demand.
 
 ## Requirements
 
-* Jenkins >= 2.248
+* Jenkins >= 2.222
 
 ## Build
 
