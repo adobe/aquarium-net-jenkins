@@ -11,7 +11,7 @@
 
     <groupId>com.adobe.ci.aquarium</groupId>
     <artifactId>aquarium-net-jenkins</artifactId>
-    <version>0.4.3-SNAPSHOT</version>
+    <version>dev-SNAPSHOT</version><!-- Replaced during release from git tag -->
     <packaging>hpi</packaging>
     <name>Aquarium Net Jenkins Plugin</name>
     <description>Dynamically allocates required resources from Aquarium Fish cluster nodes</description>
