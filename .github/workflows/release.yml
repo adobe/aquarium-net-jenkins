@@ -22,7 +22,7 @@ jobs:
           distribution: 'adopt'
 
       - name: Set version from the closest git tag
-        run: mvn versions:set -DnewVersion="$(git describe --always --tags --match 'v*')$([ "$(git diff)" = '' ] || echo '-dirty')"
+        run: mvn --batch-mode versions:set -DnewVersion="$(git describe --always --tags --match 'v*' | sed 's/^v//')$([ "$(git diff)" = '' ] || echo '-dirty')"
 
       - name: Build with Maven
         run: mvn --batch-mode --update-snapshots package
