@@ -139,7 +139,6 @@ public class AquariumCloud extends Cloud {
 
     @Override
     public boolean canProvision(Label label) {
-        LOG.log(Level.INFO, "Can provision label expression? : " + label.toString());
         try {
             // Update the cache if time has come
             if( this.labelsCachedUpdateTime < System.currentTimeMillis() ) {
