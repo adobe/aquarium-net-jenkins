@@ -68,7 +68,7 @@ public class AquariumNodeInfoStep extends Step implements Serializable {
 
         @Override
         protected Object run() throws Exception {
-            JSONObject json = null;
+            JSONObject json = new JSONObject();
             try {
                 LOGGER.log(Level.FINE, "Starting nodeInfo step.");
 

@@ -59,7 +59,7 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
     public void taskAccepted(Executor executor, Queue.Task task) {
         super.taskAccepted(executor, task);
         Queue.Executable exec = executor.getCurrentExecutable();
-        LOG.log(Level.INFO, " Computer {0} accepted task {1}", new Object[] {this, exec});
+        LOG.log(Level.INFO, "Computer {0} accepted task {1}", new Object[] {this, exec});
 
         // Tell the current workflow about the node we're executing on
         // Not that great solution - will be better to use the node step listener somehow, but I did not found a way to do that
@@ -85,7 +85,7 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
     @Override
     public void taskCompleted(Executor executor, Queue.Task task, long durationMS) {
         Queue.Executable exec = executor.getCurrentExecutable();
-        LOG.log(Level.FINE, " Computer {0} completed task {1}", new Object[] {this, exec});
+        LOG.log(Level.FINE, "Computer {0} completed task {1}", new Object[] {this, exec});
 
         setAcceptingTasks(false);
         super.taskCompleted(executor, task, durationMS);
@@ -112,13 +112,13 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
         setAcceptingTasks(false);
         super.taskCompletedWithProblems(executor, task, durationMS, problems);
         Queue.Executable exec = executor.getCurrentExecutable();
-        LOG.log(Level.INFO, " Computer {0} completed task {1} with problems", new Object[] {this, exec});
+        LOG.log(Level.INFO, "Computer {0} completed task {1} with problems", new Object[] {this, exec});
         done();
     }
 
     @Override
     public String toString() {
-        return String.format("AquariumComputer name: %s slave: %s", getName(), getNode());
+        return String.format("AquariumComputer name: %s slave: %s (%s)", getName(), getNode(), this.getAppInfo());
     }
 
     @NotNull

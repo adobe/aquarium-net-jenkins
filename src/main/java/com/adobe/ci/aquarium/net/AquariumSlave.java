@@ -202,6 +202,7 @@ public class AquariumSlave extends AbstractCloudSlave {
                 LOG.log(Level.SEVERE, msg);
                 break;
             }
+            Thread.sleep(5000);
         }
 
         String msg = String.format("Disconnected computer %s", name);
