@@ -27,13 +27,13 @@ import java.util.UUID;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
-public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExecution<String> {
+public class AquariumCreateSnapshotStepExecution extends SynchronousNonBlockingStepExecution<String> {
     private static final long serialVersionUID = 1L;
-    private static final transient Logger LOGGER = Logger.getLogger(AquariumSnapshotStepExecution.class.getName());
+    private static final transient Logger LOGGER = Logger.getLogger(AquariumCreateSnapshotStepExecution.class.getName());
 
-    private final AquariumSnapshotStep step;
+    private final AquariumCreateSnapshotStep step;
 
-    AquariumSnapshotStepExecution(AquariumSnapshotStep step, StepContext context) {
+    AquariumCreateSnapshotStepExecution(AquariumCreateSnapshotStep step, StepContext context) {
         super(context);
         this.step = step;
     }
@@ -56,10 +56,10 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
     @Override
     protected String run() throws Exception {
         boolean full = step.isFull();
-        ApplicationStatus when = step.getWhen();
+        ApplicationStatus when = ApplicationStatus.fromValue(step.getWhen());
 
         try {
-            LOGGER.log(Level.FINE, "Starting containerLog step.");
+            LOGGER.log(Level.FINE, "Starting Aquarium Create Snapshot step.");
 
             Node node = getContext().get(Node.class);
             if( !(node instanceof AquariumSlave) ) {
@@ -79,7 +79,7 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
             LOGGER.log(Level.FINE, msg);
             return "";
         } catch (Exception e) {
-            String msg = "Failed to request snapshot of the Application";
+            String msg = "Failed to request create snapshot of the Application";
             logger().println(msg);
             LOGGER.log(Level.WARNING, msg, e);
             return "";
@@ -88,7 +88,7 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
 
     @Override
     public void stop(Throwable cause) throws Exception {
-        LOGGER.log(Level.FINE, "Stopping Aquarium snapshot step.");
+        LOGGER.log(Level.FINE, "Stopping Aquarium Create Snapshot step.");
         super.stop(cause);
     }
 }

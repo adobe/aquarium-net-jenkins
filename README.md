@@ -35,13 +35,19 @@ connect to the created agent node to serve the build needs.
 
 You can use the next steps in the pipeline:
 
-* `aquariumSnapshot()` (`full: false`)
+* `aquariumCreateSnapshot()` (`full: false`)
    Trigger the current Aquarium Application to snapshot the current state. What actually will be
-   captured really depends on the Label driver, but in general the rules are:
+   captured really depends on the used driver, but in general the rules are:
      * `full: false` - partial snapshot, just the attached disks except for the root disk.
      * `full: true` - full snapshot including root disk and, if possible, memory of the running env.
 
-* `aquariumNodeInfo()`
+* `aquariumCreateImage()` (`full: false`)
+   Trigger the current Aquarium Application to create an image of the current worker. What actually
+   will be captured really depends on the used driver, but in general the rules are:
+     * `full: false` - root image, just the root disk without the attached disks.
+     * `full: true` - full image including all the disks.
+
+* `aquariumApplicationInfo()`
    Returns info about the currently running node in which the step is executed. Useful if your
    pipeline wants to store it somewhere or use in the logic. The format is:
    ```yaml

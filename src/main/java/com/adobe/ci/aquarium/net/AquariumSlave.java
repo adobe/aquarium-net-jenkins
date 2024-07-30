@@ -25,10 +25,7 @@ import hudson.model.Queue;
 import hudson.model.TaskListener;
 import hudson.remoting.Engine;
 import hudson.remoting.VirtualChannel;
-import hudson.slaves.AbstractCloudSlave;
-import hudson.slaves.Cloud;
-import hudson.slaves.ComputerLauncher;
-import hudson.slaves.SlaveComputer;
+import hudson.slaves.*;
 import jenkins.model.Jenkins;
 import jenkins.security.MasterToSlaveCallable;
 import org.apache.commons.lang.RandomStringUtils;
@@ -129,7 +126,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     }
 
     @Override
-    protected void _terminate(TaskListener listener) throws IOException, InterruptedException {
+    synchronized protected void _terminate(TaskListener listener) throws IOException, InterruptedException {
         LOG.log(Level.INFO, "Terminating Aquarium resource for agent {0}", this.name);
 
         AquariumCloud cloud;
@@ -150,6 +147,10 @@ public class AquariumSlave extends AbstractCloudSlave {
             LOG.log(Level.SEVERE, msg);
             listener.fatalError(msg);
             return;
+        }
+        if( !(computer.getOfflineCause() instanceof AquariumOfflineCause) ) {
+            computer.disconnect(new AquariumOfflineCause());
+            LOG.log(Level.INFO, "Disconnected computer for node '" + name + "'.");
         }
 
         // Tell the slave to stop JNLP reconnects.
@@ -342,4 +343,10 @@ public class AquariumSlave extends AbstractCloudSlave {
         }
     }
 
+    public static class AquariumOfflineCause extends OfflineCause {
+        @Override
+        public String toString() {
+            return "Deallocating Aquarium resource";
+        }
+    }
 }

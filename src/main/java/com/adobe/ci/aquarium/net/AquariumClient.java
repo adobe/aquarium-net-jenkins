@@ -167,6 +167,15 @@ public class AquariumClient {
         new ApplicationApi(api_client_pool.get(0)).applicationTaskCreatePost(app_uid, task);
     }
 
+    public void applicationTaskImage(UUID app_uid, ApplicationStatus when, Boolean full) throws Exception {
+        startConnection();
+        ApplicationTask task = new ApplicationTask();
+        task.setTask("image");
+        task.setWhen(when);
+        task.setOptions(Collections.singletonMap("full", full));
+        new ApplicationApi(api_client_pool.get(0)).applicationTaskCreatePost(app_uid, task);
+    }
+
     public void applicationDeallocate(UUID app_uid) throws Exception {
         startConnection();
         new ApplicationApi(api_client_pool.get(0)).applicationDeallocateGet(app_uid);

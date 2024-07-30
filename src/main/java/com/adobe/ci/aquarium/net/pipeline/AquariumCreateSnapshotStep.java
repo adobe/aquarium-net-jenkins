@@ -20,6 +20,7 @@ import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
+import org.jetbrains.annotations.NotNull;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -29,13 +30,16 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-public class AquariumSnapshotStep extends Step implements Serializable {
+public class AquariumCreateSnapshotStep extends Step implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private boolean full = false;
-    private ApplicationStatus when = ApplicationStatus.ALLOCATED;
+    private Boolean full;
+    private String when;
 
-    @DataBoundConstructor public AquariumSnapshotStep() {}
+    @DataBoundConstructor public AquariumCreateSnapshotStep(Boolean full, String when) {
+        this.full = full;
+        this.when = when;
+    }
 
     @DataBoundSetter
     public void setFull(boolean full) {
@@ -44,24 +48,31 @@ public class AquariumSnapshotStep extends Step implements Serializable {
 
     @DataBoundSetter
     public void setWhen(String status) {
-        if( status != "" ) {
-            this.when = ApplicationStatus.fromValue(status);
+        if( status.isEmpty() ) {
+            this.when = ApplicationStatus.fromValue(status).toString();
         } else {
-            this.when = ApplicationStatus.ALLOCATED;
+            // Back to default
+            this.when = null;
         }
     }
 
     public boolean isFull() {
+        if( this.full == null ) {
+            return false;
+        }
         return this.full;
     }
 
-    public ApplicationStatus getWhen() {
+    public String getWhen() {
+        if( this.when == null ) {
+            return ApplicationStatus.ALLOCATED.toString();
+        }
         return this.when;
     }
 
     @Override
     public StepExecution start(StepContext context) throws Exception {
-        return new AquariumSnapshotStepExecution(this, context);
+        return new AquariumCreateSnapshotStepExecution(this, context);
     }
 
     @Extension
@@ -69,12 +80,13 @@ public class AquariumSnapshotStep extends Step implements Serializable {
 
         @Override
         public String getFunctionName() {
-            return "aquariumSnapshot";
+            return "aquariumCreateSnapshot";
         }
 
+        @NotNull
         @Override
         public String getDisplayName() {
-            return "Make snapshot of the current node";
+            return "Make snapshot of the current worker";
         }
 
         @Override

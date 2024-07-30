@@ -30,23 +30,23 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class AquariumNodeInfoStep extends Step implements Serializable {
+public class AquariumApplicationInfoStep extends Step implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @DataBoundConstructor public AquariumNodeInfoStep() {}
+    @DataBoundConstructor public AquariumApplicationInfoStep() {}
 
     @Override
     public StepExecution start(StepContext context) throws Exception {
-        return new AquariumNodeInfoStepExecution(this, context);
+        return new AquariumApplicationInfoStepExecution(this, context);
     }
 
-    public static class AquariumNodeInfoStepExecution extends SynchronousNonBlockingStepExecution<Object> {
+    public static class AquariumApplicationInfoStepExecution extends SynchronousNonBlockingStepExecution<Object> {
         private static final long serialVersionUID = 1L;
-        private static final transient Logger LOGGER = Logger.getLogger(AquariumNodeInfoStepExecution.class.getName());
+        private static final transient Logger LOGGER = Logger.getLogger(AquariumApplicationInfoStepExecution.class.getName());
 
-        private final AquariumNodeInfoStep step;
+        private final AquariumApplicationInfoStep step;
 
-        AquariumNodeInfoStepExecution(AquariumNodeInfoStep step, StepContext context) {
+        AquariumApplicationInfoStepExecution(AquariumApplicationInfoStep step, StepContext context) {
             super(context);
             this.step = step;
         }
@@ -70,18 +70,18 @@ public class AquariumNodeInfoStep extends Step implements Serializable {
         protected Object run() throws Exception {
             JSONObject json = new JSONObject();
             try {
-                LOGGER.log(Level.FINE, "Starting nodeInfo step.");
+                LOGGER.log(Level.FINE, "Starting ApplicationInfo step.");
 
                 Node node = getContext().get(Node.class);
                 if( !(node instanceof AquariumSlave) ) {
                     throw new AbortException(
-                            String.format("Node is not an Aquarium node: %s", node != null ? node.getNodeName() : null));
+                            String.format("Worker is not an Aquarium one: %s", node != null ? node.getNodeName() : null));
                 }
 
                 SlaveComputer comp = ((AquariumSlave) node).getComputer();
                 if( !(comp instanceof AquariumComputer) ) {
                     throw new AbortException(
-                            String.format("Node is not an Aquarium computer: %s", comp != null ? comp.getName() : null));
+                            String.format("Worker is not an Aquarium computer: %s", comp != null ? comp.getName() : null));
                 }
 
                 JSONObject app_info = ((AquariumComputer) comp).getAppInfo();
@@ -89,11 +89,11 @@ public class AquariumNodeInfoStep extends Step implements Serializable {
                 json.put("ApplicationInfo", app_info);
                 json.put("DefinitionInfo", def_info);
             } catch (InterruptedException e) {
-                String msg = "Interrupted while getting node info from the node";
+                String msg = "Interrupted while getting Application info from the worker";
                 logger().println(msg);
                 LOGGER.log(Level.FINE, msg);
             } catch (Exception e) {
-                String msg = "Failed to get node info from the node";
+                String msg = "Failed to get Application info from the worker";
                 logger().println(msg);
                 LOGGER.log(Level.WARNING, msg, e);
             }
@@ -102,7 +102,7 @@ public class AquariumNodeInfoStep extends Step implements Serializable {
 
         @Override
         public void stop(Throwable cause) throws Exception {
-            LOGGER.log(Level.FINE, "Stopping Aquarium NodeInfo step.");
+            LOGGER.log(Level.FINE, "Stopping Aquarium ApplicationInfo step.");
             super.stop(cause);
         }
     }
@@ -112,12 +112,12 @@ public class AquariumNodeInfoStep extends Step implements Serializable {
 
         @Override
         public String getFunctionName() {
-            return "aquariumNodeInfo";
+            return "aquariumApplicationInfo";
         }
 
         @Override
         public String getDisplayName() {
-            return "Get node info about the current node";
+            return "Get Application info about the current worker";
         }
 
         @Override
