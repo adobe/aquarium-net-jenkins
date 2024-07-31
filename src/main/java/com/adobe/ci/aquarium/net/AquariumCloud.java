@@ -55,10 +55,13 @@ public class AquariumCloud extends Cloud {
 
     private static final Logger LOG = Logger.getLogger(AquariumCloud.class.getName());
 
+    private static final int DEFAULT_AGENT_CONNECTION_WAIT_MIN = 10;
+
     private String initHostUrl;
     @CheckForNull
     private String credentialsId;
     private String caCredentialsId;
+    private Integer agentConnectWaitMin;
     private String jenkinsUrl;
     private String metadata;
     private List<LabelMapping> labelMappings = new ArrayList<>();
@@ -74,30 +77,33 @@ public class AquariumCloud extends Cloud {
     }
 
     // Used by jelly
-    public String getName() {
-        return name;
+    public String getName() { return this.name; }
+
+    // Used by jelly
+    public String getInitHostUrl() { return this.initHostUrl; }
+
+    // Used by jelly
+    public String getCredentialsId() { return this.credentialsId; }
+
+    // Used by jelly
+    public String getCaCredentialsId() { return this.caCredentialsId; }
+
+    public int getAgentConnectWaitMin() {
+        if( this.agentConnectWaitMin == null || this.agentConnectWaitMin < 0 ) {
+            return DEFAULT_AGENT_CONNECTION_WAIT_MIN;
+        }
+        return this.agentConnectWaitMin.intValue();
     }
 
     // Used by jelly
-    public String getInitHostUrl() {
-        return initHostUrl;
-    }
+    public String getJenkinsUrl() { return this.jenkinsUrl; }
 
     // Used by jelly
-    public String getCredentialsId() { return credentialsId; }
-
-    // Used by jelly
-    public String getCaCredentialsId() { return caCredentialsId; }
-
-    // Used by jelly
-    public String getJenkinsUrl() { return jenkinsUrl; }
-
-    // Used by jelly
-    public String getMetadata() { return metadata; }
+    public String getMetadata() { return this.metadata; }
 
     // Used by jelly
     public List<LabelMapping> getLabelMappings() {
-        return labelMappings;
+        return this.labelMappings;
     }
 
     public AquariumClient getClient() {
@@ -111,12 +117,17 @@ public class AquariumCloud extends Cloud {
 
     @DataBoundSetter
     public void setCredentialsId(String value) {
-        credentialsId = Util.fixEmpty(value);
+        this.credentialsId = Util.fixEmpty(value);
     }
 
     @DataBoundSetter
     public void setCaCredentialsId(String value) {
-        caCredentialsId = Util.fixEmpty(value);
+        this.caCredentialsId = Util.fixEmpty(value);
+    }
+
+    @DataBoundSetter
+    public void setAgentConnectWaitMin(Integer value) {
+        this.agentConnectWaitMin = value;
     }
 
     @DataBoundSetter
@@ -126,7 +137,7 @@ public class AquariumCloud extends Cloud {
 
     @DataBoundSetter
     public void setMetadata(String value) {
-        metadata = Util.fixEmpty(value);
+        this.metadata = Util.fixEmpty(value);
     }
 
     @DataBoundSetter

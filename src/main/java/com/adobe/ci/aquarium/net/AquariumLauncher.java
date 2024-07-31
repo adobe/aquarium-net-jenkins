@@ -88,6 +88,7 @@ public class AquariumLauncher extends JNLPLauncher {
             // Wait for fish node election process - it could take a while if there is not enough resources in the pool
             SlaveComputer slaveComputer;
             ApplicationState state = null;
+            int wait_in_elected = 60; // 60 * 5 - status_call_time >= 5 mins
             while( true ) {
                 slaveComputer = node.getComputer();
                 if( slaveComputer == null ) {
@@ -102,6 +103,14 @@ public class AquariumLauncher extends JNLPLauncher {
                     state = client.applicationStateGet(app.getUID());
                     if( state.getStatus() == ApplicationStatus.ALLOCATED ) {
                         break;
+                    } else if( state.getStatus() == ApplicationStatus.ELECTED ) {
+                        // Application should not be in elected state for too long
+                        wait_in_elected--;
+                        if( wait_in_elected < 0 ) {
+                            // Wait for elected failed
+                            LOG.log(Level.WARNING, "Application stuck in ELECTED state for too long:" + state.getDescription() + ", node:" + comp.getName());
+                            break;
+                        }
                     } else if( state.getStatus() != ApplicationStatus.ELECTED && state.getStatus() != ApplicationStatus.NEW) {
                         // Resource launch failed
                         LOG.log(Level.WARNING, "Unable to get resource from pool:" + state.getDescription() + ", node:" + comp.getName());
@@ -121,7 +130,7 @@ public class AquariumLauncher extends JNLPLauncher {
             comp.setDefinitionInfo(JSONObject.fromObject(label.getDefinitions().get(res.getDefinitionIndex())));
 
             // Wait for agent connection for 10 minutes
-            int wait_agent_connect = 120; // 120 * 5 - status_call_time >= 10 mins
+            int wait_agent_connect = cloud.getAgentConnectWaitMin() * 60 / 5; // 120 * 5 - status_call_time >= 10 mins
             for( int waited_for_agent = 0; waited_for_agent < wait_agent_connect; waited_for_agent++ ) {
                 slaveComputer = node.getComputer();
                 if( slaveComputer == null ) {
@@ -150,7 +159,7 @@ public class AquariumLauncher extends JNLPLauncher {
                     // Clean up
                     node.terminate();
                 }
-                throw new IllegalStateException("Agent is not connected, status:" + state.toString());
+                throw new IllegalStateException("Agent is not connected, status:" + state);
             }
 
             // Set up the retention strategy to destroy the node when it's completed processes, idle will initiate the
