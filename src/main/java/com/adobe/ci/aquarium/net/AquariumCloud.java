@@ -66,7 +66,7 @@ public class AquariumCloud extends Cloud {
     private String metadata;
     private List<LabelMapping> labelMappings = new ArrayList<>();
 
-    // A collection of labels supported by the Auqarium Fish cluster
+    // A collection of labels supported by the Aquarium Fish cluster
     private Set<LabelAtom> labelsCached;
     private long labelsCachedUpdateTime = 0;
 
@@ -92,7 +92,7 @@ public class AquariumCloud extends Cloud {
         if( this.agentConnectWaitMin == null || this.agentConnectWaitMin < 0 ) {
             return DEFAULT_AGENT_CONNECTION_WAIT_MIN;
         }
-        return this.agentConnectWaitMin.intValue();
+        return this.agentConnectWaitMin;
     }
 
     // Used by jelly
