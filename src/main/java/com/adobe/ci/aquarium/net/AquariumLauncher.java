@@ -78,7 +78,7 @@ public class AquariumLauncher extends JNLPLauncher {
             node.setApplicationUID(app.getUID());
 
             // Notify computer log that the request for Application was sent
-            listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + "#" + label.getVersion());
+            listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
             JSONObject app_info = new JSONObject();
             app_info.put("ApplicationUID", app.getUID().toString());
             app_info.put("LabelName", label.getName());
@@ -166,6 +166,15 @@ public class AquariumLauncher extends JNLPLauncher {
             // agent termination if no workload was assigned to it.
             node.setRetentionStrategy(new OnceRetentionStrategy(5));
 
+            // Adding listener to the channel to catch any kind of interruptions
+            if( computer.getChannel() != null ) {
+                computer.getChannel().addListener(new AquariumChannelListener(comp));
+            } else {
+                LOG.log(Level.WARNING, "Unable to set channel listener since channel is null");
+            }
+            // Print data again because was cleaned when agent connected
+            listener.getLogger().println("Aquarium Application: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
+            listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
             computer.setAcceptingTasks(true);
             launched = true;
 
