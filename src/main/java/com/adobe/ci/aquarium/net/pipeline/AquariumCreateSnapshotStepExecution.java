@@ -70,9 +70,9 @@ public class AquariumCreateSnapshotStepExecution extends SynchronousNonBlockingS
             UUID app_id = ((AquariumSlave)node).getApplicationUID();
             AquariumCloud cloud = ((AquariumSlave)node).getAquariumCloud();
 
-            cloud.getClient().applicationTaskSnapshot(app_id, when, full);
+            UUID task_uid = cloud.getClient().applicationTaskSnapshot(app_id, when, full);
 
-            return "";
+            return task_uid.toString();
         } catch (InterruptedException e) {
             String msg = "Interrupted while requesting snapshot of the Application";
             logger().println(msg);

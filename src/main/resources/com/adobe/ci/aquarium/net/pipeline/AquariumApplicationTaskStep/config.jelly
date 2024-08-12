@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+    <f:block>
+        <p>
+            Get known ApplicationTask from the Aquarium cluster. Optionally can
+            wait for the result of the task. Could be executed outside of the
+            aquarium worker.
+        </p>
+    </f:block>
+    <f:entry field="taskUid" title="UUID of the task you want to fetch">
+        <f:textbox/>
+    </f:entry>
+    <f:entry field="wait" title="Will wait for the result to be filled out">
+        <f:checkbox/>
+    </f:entry>
+</j:jelly>

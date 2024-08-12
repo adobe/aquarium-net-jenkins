@@ -70,9 +70,9 @@ public class AquariumCreateImageStepExecution extends SynchronousNonBlockingStep
             UUID app_id = ((AquariumSlave)node).getApplicationUID();
             AquariumCloud cloud = ((AquariumSlave)node).getAquariumCloud();
 
-            cloud.getClient().applicationTaskImage(app_id, when, full);
+            UUID task_uid = cloud.getClient().applicationTaskImage(app_id, when, full);
 
-            return "";
+            return task_uid.toString();
         } catch (InterruptedException e) {
             String msg = "Interrupted while requesting create image of the Application";
             logger().println(msg);
