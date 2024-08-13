@@ -12,6 +12,7 @@
 
 package com.adobe.ci.aquarium.net;
 
+import antlr.ANTLRException;
 import com.adobe.ci.aquarium.fish.client.model.User;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
@@ -32,6 +33,7 @@ import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
@@ -82,6 +84,7 @@ public class AquariumCloud extends Cloud {
     public String getInitHostUrl() { return this.initHostUrl; }
 
     // Used by jelly
+    @Nullable
     public String getCredentialsId() { return this.credentialsId; }
 
     // Used by jelly
@@ -149,16 +152,19 @@ public class AquariumCloud extends Cloud {
 
     @Override
     public boolean canProvision(Label label) {
-        LOG.log(Level.FINEST, "Can provision label? " + label.toString());
+        LOG.log(Level.FINEST, "Can provision label? " + label);
         try {
             // Update the cache if time has come
             if( this.labelsCachedUpdateTime < System.currentTimeMillis() ) {
                 this.updateLabelsCache();
             }
 
-            // Simple comparison by label name
-            if( this.labelsCached.contains(label) )
-                return true;
+            // Prepare label since it can contain :version in any part of the expression
+            if( label.toString().contains(":") ) {
+                // Modify label to cut-out the versions for now
+                label = Label.parseExpression(label.getExpression().replaceAll(":[0-9]+", ""));
+                LOG.log(Level.FINEST, "Modified label: " + label);
+            }
 
             // Match of the label expression
             return label.matches(this.labelsCached);
@@ -187,13 +193,24 @@ public class AquariumCloud extends Cloud {
         this.labelsCachedUpdateTime = System.currentTimeMillis() + 1800000;
     }
 
-    private PlannedNode buildAgent(String label) {
+    /**
+     * Planning agent to create
+     * @param label Aquarium label name
+     * @param version Aquarium label version
+     * @return PlannedNode which will be connected from the agent in the future
+     */
+    private PlannedNode buildAgent(String label, @Nullable Integer version) {
         Future<Node> future;
         String displayName;
+        String labelVersion = label;
+        if( version != null ) {
+            labelVersion += ":" + version;
+        }
         try {
-            // Make sure the aquarium requested label is first in the label list
+            // NOTE: labelVersion position is important! Make sure the aquarium requested label is first in the label
+            // list so the Launcher logic later will be able to figure which label to use to request the Application
             AquariumSlave agent = AquariumSlave.builder().cloud(this)
-                    .addLabel(label).addLabel(LabelMapping.getLabels(this.labelMappings, label)).build();
+                    .addLabel(labelVersion).addLabel(LabelMapping.getLabels(this.labelMappings, label)).build();
             displayName = agent.getDisplayName();
             future = Futures.immediateFuture(agent);
         } catch (IOException | Descriptor.FormException e) {
@@ -239,21 +256,52 @@ public class AquariumCloud extends Cloud {
 
         LOG.log(Level.INFO, "In provisioning : " + allInProvisioning + " and we need to add: " + toBeProvisioned + "(total required: " + actualExcessWorkload + ")");
 
+        // Preparing labels expression without versions
+        Label labelNoVersions = label;
+        boolean versionsInLabel = label.toString().contains(":");
+        if( versionsInLabel ) {
+            try {
+                labelNoVersions = Label.parseExpression(label.getExpression().replaceAll(":[0-9]+", ""));
+            } catch (ANTLRException e) {
+                LOG.log(Level.SEVERE, "Unable to cut-out versions from the label '" + label + "' due to exception: " + e.getMessage());
+            }
+        }
+
         // Find first label that is matching to the requested expression
         String label_name = "";
+        Integer label_version = null; // Null here means latest version of the label
         Set<LabelAtom> set = new HashSet<LabelAtom>();
         for( LabelAtom l : this.labelsCached ) {
             set.clear();
             set.add(l);
-            if( label.matches(set) ) {
+            // Check for versioned labels in the expression
+            if( labelNoVersions.matches(set) ) {
                 label_name = l.getName();
+                if( versionsInLabel ) {
+                    // Let's find version for this label if it's here. I think there is not much sense in using different
+                    // versions of the same label in expression from usage perspective so any found version is good enough.
+                    for( LabelAtom atom : label.listAtoms() ) {
+                        String atomStr = atom.toString();
+                        if( atomStr.startsWith(label_name) ) {
+                            if( atomStr.contains(":") ) {
+                                int colonPos = atomStr.indexOf(':');
+                                // If it's just colon in the end of the label name without version - skipping it
+                                if( atomStr.length() < colonPos+2 ) {
+                                    continue;
+                                }
+                                label_version = Integer.parseInt(atomStr.substring(colonPos+1));
+                            }
+                            break;
+                        }
+                    }
+                }
                 break;
             }
         }
-        LOG.log(Level.INFO, "Chosen label : " + label_name);
+        LOG.log(Level.INFO, "Chosen label: " + label_name);
 
         while( toBeProvisioned > 0 /* && Limits */ ) {
-            plannedNodes.add(buildAgent(label_name));
+            plannedNodes.add(buildAgent(label_name, label_version));
             toBeProvisioned--;
         }
         return plannedNodes;

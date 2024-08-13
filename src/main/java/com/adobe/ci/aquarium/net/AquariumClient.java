@@ -27,6 +27,7 @@ import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.jenkinsci.plugins.plaincredentials.FileCredentials;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -107,6 +108,13 @@ public class AquariumClient {
     public List<Label> labelFind(String name) throws ApiException {
         startConnection();
         return new LabelApi(api_client_pool.get(0)).labelListGet("name='" + StringEscapeUtils.escapeSql(name) + "'");
+    }
+
+    @Nullable
+    public Label labelVersionFind(String name, Integer version) throws ApiException {
+        startConnection();
+        List<Label> lst = new LabelApi(api_client_pool.get(0)).labelListGet("name='" + StringEscapeUtils.escapeSql(name) + "' AND version=" + version);
+        return lst.isEmpty() ? null : lst.get(0);
     }
 
     public Label labelFindLatest(String name) throws Exception {
