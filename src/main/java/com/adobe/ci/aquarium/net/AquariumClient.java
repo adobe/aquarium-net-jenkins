@@ -161,6 +161,11 @@ public class AquariumClient {
         return new ApplicationApi(api_client_pool.get(0)).applicationCreatePost(app);
     }
 
+    public Application applicationGet(UUID app_uid) throws Exception {
+        startConnection();
+        return new ApplicationApi(api_client_pool.get(0)).applicationGet(app_uid);
+    }
+
     public ApplicationState applicationStateGet(UUID app_uid) throws Exception {
         startConnection();
         return new ApplicationApi(api_client_pool.get(0)).applicationStateGet(app_uid);

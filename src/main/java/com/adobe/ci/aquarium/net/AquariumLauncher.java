@@ -44,7 +44,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
     @Override
     public boolean isLaunchSupported() {
-        return !launched;
+        return !this.launched;
     }
 
     @Override
@@ -60,84 +60,100 @@ public class AquariumLauncher extends JNLPLauncher {
             throw new IllegalStateException("Node has been removed, cannot launch " + computer.getName());
         }
 
-        LOG.log(Level.INFO, "Launch node" + comp.getName());
+        LOG.log(Level.INFO, "Launch node " + comp.getName());
 
         String nodeFirstLabel = node.getLabelString().split(" ")[0];
         try {
             // Request for resource
             AquariumCloud cloud = node.getAquariumCloud();
             AquariumClient client = cloud.getClient();
+
+            SlaveComputer slaveComputer;
             Label label = null;
+            Application app;
+            ApplicationState state = null;
 
             // Checking if label contains version
             int colonPos = nodeFirstLabel.indexOf(':');
-            if( colonPos > 0 ) {
+            if (colonPos > 0) {
                 // Label name contains version, so getting the required label version
 
                 String labelName = nodeFirstLabel.substring(0, colonPos);
-                Integer labelVersion = Integer.parseInt(nodeFirstLabel.substring(colonPos+1));
+                Integer labelVersion = Integer.parseInt(nodeFirstLabel.substring(colonPos + 1));
                 label = client.labelVersionFind(labelName, labelVersion);
             } else {
                 // No version in the label, so using latest one
                 label = client.labelFindLatest(nodeFirstLabel);
             }
-            if( label == null) {
+            if (label == null) {
                 throw new IllegalStateException("Label was not found in Aquarium: " + nodeFirstLabel);
             }
-            Application app = client.applicationCreate(
-                    label.getUID(),
-                    cloud.getJenkinsUrl(),
-                    node.getNodeName(),
-                    comp.getJnlpMac(),
-                    cloud.getMetadata()
-            );
 
-            node.setApplicationUID(app.getUID());
+            // If jenkins master restarted with already launched node - we should not create a new Application and just
+            // to wait when the agent will connect back or if it will not connect - terminate the node.
+            if( !this.launched ) {
 
-            // Notify computer log that the request for Application was sent
-            listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
-            JSONObject app_info = new JSONObject();
-            app_info.put("ApplicationUID", app.getUID().toString());
-            app_info.put("LabelName", label.getName());
-            app_info.put("LabelVersion", label.getVersion());
-            comp.setAppInfo(app_info);
+                // Since the Application was not requested - requesting a new one
+                if( node.getApplicationUID() == null ) {
+                    app = client.applicationCreate(
+                            label.getUID(),
+                            cloud.getJenkinsUrl(),
+                            node.getNodeName(),
+                            comp.getJnlpMac(),
+                            cloud.getMetadata()
+                    );
 
-            // Wait for fish node election process - it could take a while if there is not enough resources in the pool
-            SlaveComputer slaveComputer;
-            ApplicationState state = null;
-            int wait_in_elected = 60; // 60 * 5 - status_call_time >= 5 mins
-            while( true ) {
-                slaveComputer = node.getComputer();
-                if( slaveComputer == null ) {
-                    throw new IllegalStateException("Node was deleted, computer is null");
+                    node.setApplicationUID(app.getUID());
+                    listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
+                } else {
+                    app = client.applicationGet(node.getApplicationUID());
+                    listener.getLogger().println("Aquarium Application already exist: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
                 }
-                if( slaveComputer.isOnline() ) {
-                    break;
-                }
+                // Notify computer log that the request for Application was sent
+                JSONObject app_info = new JSONObject();
+                app_info.put("ApplicationUID", app.getUID().toString());
+                app_info.put("LabelName", label.getName());
+                app_info.put("LabelVersion", label.getVersion());
+                comp.setAppInfo(app_info);
 
-                // Check that the resource hasn't failed already
-                try {
-                    state = client.applicationStateGet(app.getUID());
-                    if( state.getStatus() == ApplicationStatus.ALLOCATED ) {
-                        break;
-                    } else if( state.getStatus() == ApplicationStatus.ELECTED ) {
-                        // Application should not be in elected state for too long
-                        wait_in_elected--;
-                        if( wait_in_elected < 0 ) {
-                            // Wait for elected failed
-                            LOG.log(Level.WARNING, "Application stuck in ELECTED state for too long:" + state.getDescription() + ", node:" + comp.getName());
-                            break;
-                        }
-                    } else if( state.getStatus() != ApplicationStatus.ELECTED && state.getStatus() != ApplicationStatus.NEW) {
-                        // Resource launch failed
-                        LOG.log(Level.WARNING, "Unable to get resource from pool:" + state.getDescription() + ", node:" + comp.getName());
+                // Wait for fish node election process - it could take a while if there is not enough resources in the pool
+                int wait_in_elected = 60; // 60 * 5 - status_call_time >= 5 mins
+                while (true) {
+                    slaveComputer = node.getComputer();
+                    if (slaveComputer == null) {
+                        throw new IllegalStateException("Node was deleted, computer is null");
+                    }
+                    if (slaveComputer.isOnline()) {
                         break;
                     }
-                } catch( ApiException e ) {
-                    LOG.log(Level.WARNING, "Error happened during API request:" + e + ", node:" + comp.getName());
-                }
 
-                Thread.sleep(5000);
+                    // Check that the resource hasn't failed already
+                    try {
+                        state = client.applicationStateGet(app.getUID());
+                        if (state.getStatus() == ApplicationStatus.ALLOCATED) {
+                            break;
+                        } else if (state.getStatus() == ApplicationStatus.ELECTED) {
+                            // Application should not be in elected state for too long
+                            wait_in_elected--;
+                            if (wait_in_elected < 0) {
+                                // Wait for elected failed
+                                LOG.log(Level.WARNING, "Application stuck in ELECTED state for too long:" + state.getDescription() + ", node:" + comp.getName());
+                                break;
+                            }
+                        } else if (state.getStatus() != ApplicationStatus.ELECTED && state.getStatus() != ApplicationStatus.NEW) {
+                            // Resource launch failed
+                            LOG.log(Level.WARNING, "Unable to get resource from pool:" + state.getDescription() + ", node:" + comp.getName());
+                            break;
+                        }
+                    } catch (ApiException e) {
+                        LOG.log(Level.WARNING, "Error happened during API request:" + e + ", node:" + comp.getName());
+                    }
+
+                    Thread.sleep(5000);
+                }
+            } else {
+                listener.getLogger().println("Aquarium Application Resource agent reconnecting...");
+                app = client.applicationGet(node.getApplicationUID());
             }
 
             // Print to the computer log about the LabelDefinition was chosen
@@ -159,7 +175,7 @@ public class AquariumLauncher extends JNLPLauncher {
 
                 // Check that the resource hasn't failed already
                 try {
-                    state = client.applicationStateGet(app.getUID());
+                    state = client.applicationStateGet(node.getApplicationUID());
                     if( state.getStatus() != ApplicationStatus.ALLOCATED ) {
                         LOG.log(Level.WARNING, "Agent did not connected:" + state.getDescription() + ", node:" + comp.getName());
                         break;
@@ -171,6 +187,10 @@ public class AquariumLauncher extends JNLPLauncher {
                 Thread.sleep(5000);
             }
 
+            slaveComputer = node.getComputer();
+            if( slaveComputer == null ) {
+                throw new IllegalStateException("Node was deleted, computer is null");
+            }
             if( slaveComputer.isOffline() ) {
                 if( node != null ) {
                     // Clean up
@@ -193,7 +213,8 @@ public class AquariumLauncher extends JNLPLauncher {
             listener.getLogger().println("Aquarium Application: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
             listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
             computer.setAcceptingTasks(true);
-            launched = true;
+
+            this.launched = true;
 
             try {
                 node.save(); // We need to persist the "launched" setting...
