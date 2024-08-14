@@ -65,6 +65,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     protected AquariumSlave(String name, String nodeDescription, String cloudName, String labelStr,
                             ComputerLauncher computerLauncher) throws Descriptor.FormException, IOException {
         super(name, null, computerLauncher);
+        this.setMode(Mode.EXCLUSIVE);
         this.setNodeDescription(nodeDescription);
         this.setNumExecutors(1);
         this.setLabelString(labelStr);
