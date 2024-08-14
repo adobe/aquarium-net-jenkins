@@ -18,6 +18,10 @@
         <c:select/>
     </f:entry>
 
+    <f:entry title="${%Agent Connect Wait Minutes}" field="agentConnectWaitMin">
+        <f:number/>
+    </f:entry>
+
     <f:validateButton title="${%Test Connection}" progress="${%Testing...}"
                       method="testConnection" with="name,initHostUrl,credentialsId,caCredentialsId"/>
 
