@@ -62,11 +62,28 @@ public class AquariumLauncher extends JNLPLauncher {
 
         LOG.log(Level.INFO, "Launch node" + comp.getName());
 
+        String nodeFirstLabel = node.getLabelString().split(" ")[0];
         try {
             // Request for resource
             AquariumCloud cloud = node.getAquariumCloud();
             AquariumClient client = cloud.getClient();
-            Label label = client.labelFindLatest(node.getLabelString().split(" ")[0]);
+            Label label = null;
+
+            // Checking if label contains version
+            int colonPos = nodeFirstLabel.indexOf(':');
+            if( colonPos > 0 ) {
+                // Label name contains version, so getting the required label version
+
+                String labelName = nodeFirstLabel.substring(0, colonPos);
+                Integer labelVersion = Integer.parseInt(nodeFirstLabel.substring(colonPos+1));
+                label = client.labelVersionFind(labelName, labelVersion);
+            } else {
+                // No version in the label, so using latest one
+                label = client.labelFindLatest(nodeFirstLabel);
+            }
+            if( label == null) {
+                throw new IllegalStateException("Label was not found in Aquarium: " + nodeFirstLabel);
+            }
             Application app = client.applicationCreate(
                     label.getUID(),
                     cloud.getJenkinsUrl(),
