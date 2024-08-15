@@ -31,6 +31,7 @@ import hudson.util.ListBoxModel;
 import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.plaincredentials.FileCredentials;
+import org.jetbrains.annotations.NotNull;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
@@ -48,8 +49,6 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import static org.apache.commons.lang.StringUtils.isEmpty;
-
-class ServiceInstance {}
 
 public class AquariumCloud extends Cloud {
 
@@ -150,6 +149,7 @@ public class AquariumCloud extends Cloud {
 
     @Override
     public boolean canProvision(Label label) {
+        LOG.log(Level.FINEST, "Can provision label? " + label.toString());
         try {
             // Update the cache if time has come
             if( this.labelsCachedUpdateTime < System.currentTimeMillis() ) {
@@ -176,7 +176,7 @@ public class AquariumCloud extends Cloud {
             out.add(LabelAtom.get(label.getName()));
         });
 
-        if( out.size() == 0 ) {
+        if( out.isEmpty() ) {
             LOG.log(Level.WARNING, "Cluster contains no labels - empty list was returned");
         }
 
@@ -264,10 +264,6 @@ public class AquariumCloud extends Cloud {
         return "AquariumCloud {Name='" + name + "'}";
     }
 
-    public ServiceInstance getSI() {
-        return new ServiceInstance();
-    }
-
     public void onTerminate(AquariumSlave slave) {
     }
 
@@ -279,6 +275,7 @@ public class AquariumCloud extends Cloud {
     @Extension
     public static final class DescriptorImpl extends Descriptor<Cloud> {
 
+        @NotNull
         @Override
         public String getDisplayName() {
             return "Aquarium";
@@ -340,8 +337,7 @@ public class AquariumCloud extends Cloud {
                     ACL.SYSTEM,
                     context,
                     StandardCredentials.class,
-                    serverUrl != null ? URIRequirementBuilder.fromUri(serverUrl).build()
-                            : Collections.EMPTY_LIST,
+                    serverUrl != null ? URIRequirementBuilder.fromUri(serverUrl).build() : Collections.emptyList(),
                     CredentialsMatchers.anyOf(
                             CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class)
                     )
@@ -359,8 +355,7 @@ public class AquariumCloud extends Cloud {
                     ACL.SYSTEM,
                     context,
                     StandardCredentials.class,
-                    serverUrl != null ? URIRequirementBuilder.fromUri(serverUrl).build()
-                            : Collections.EMPTY_LIST,
+                    serverUrl != null ? URIRequirementBuilder.fromUri(serverUrl).build() : Collections.emptyList(),
                     CredentialsMatchers.anyOf(
                             CredentialsMatchers.instanceOf(FileCredentials.class)
                     )
