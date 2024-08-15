@@ -13,6 +13,7 @@
 package com.adobe.ci.aquarium.net;
 
 import com.adobe.ci.aquarium.fish.client.ApiClient;
+import com.adobe.ci.aquarium.fish.client.ApiException;
 import com.adobe.ci.aquarium.fish.client.api.ApplicationApi;
 import com.adobe.ci.aquarium.fish.client.api.LabelApi;
 import com.adobe.ci.aquarium.fish.client.api.UserApi;
@@ -98,7 +99,7 @@ public class AquariumClient {
         return c;
     }
 
-    public List<Label> labelGet() throws Exception {
+    public List<Label> labelGet() throws ApiException {
         startConnection();
         return new LabelApi(api_client_pool.get(0)).labelListGet(null);
     }
