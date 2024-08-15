@@ -21,12 +21,16 @@ If you want to use custom Fish OpenAPI specification during the build - just set
 
 Just install it to your jenkins, specify some Aquarium Fish node API address and choose credentials.
 The plugin will automatically connect to the cluster, receive the other nodes addresses to maintain
-reliable connection, get the cluster labels configuration and will allow to edit them as needed (if
-the user you use have permissions to do that).
+reliable connection, get the cluster labels configuration and will allow to use them as needed.
+
+To utilize the Label you must specify it as name for your node or label expression. Also you can
+use specific version of the label by adding suffix with colon and number to the label name like
+`your-label-name:55` - so your release build will be pinned to the version of the build environment
+forever.
 
 Now when the build will be added to queue - if the cluster have the label in stock and the limits
 are met the plugin will create the node to allow connect the jenkins and place the resource request
-in the cluster.
+(Application) in the cluster.
 
 Aquarium Fish cluster will decide which node can handle the resource request, run the resource and
 connect to the created agent node to serve the build needs.
@@ -46,6 +50,13 @@ You can use the next steps in the pipeline:
    will be captured really depends on the used driver, but in general the rules are:
      * `full: false` - root image, just the root disk without the attached disks.
      * `full: true` - full image including all the disks.
+
+* `aquariumApplicationTask(taskUid: 'UUID')` (`wait: false`)
+   Allows to figure out the task info and result. This step doesn't want to be executed directly
+   on the aquarium worker - so you can safely move on the pipeline without agent and wait there for
+   your previous snapshot/image is created. Step requires just one parameter - is UUID string that
+   you can get after execution of aquariumCreateSnapshot/aquariumCreateImage steps. Wait param will
+   allow to block the pipeline until the result of the task become available.
 
 * `aquariumApplicationInfo()`
    Returns info about the currently running node in which the step is executed. Useful if your
