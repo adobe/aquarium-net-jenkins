@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+    <f:block>
+        <p>
+            Triggers the Image operation of the current Aquarium Fish Application Resource.
+            Please make sure the disks are unmounted or synced.
+        </p>
+    </f:block>
+    <f:entry field="full" title="Make full environment image">
+        <f:checkbox/>
+    </f:entry>
+    <f:entry field="when" title="When to execute the create image operation">
+        <f:select/>
+    </f:entry>
+</j:jelly>

@@ -49,7 +49,7 @@ public class AquariumClient {
     }
 
     private void startConnection() {
-        if( api_client_pool.size() < 1 ) {
+        if( api_client_pool.isEmpty() ) {
             ApiClient cl = new ApiClient();
             cl.setBasePath(this.node_url);
             cl.setUsername(getBasicAuthCreds(this.cred_id).getUsername());
@@ -104,7 +104,7 @@ public class AquariumClient {
         return new LabelApi(api_client_pool.get(0)).labelListGet(null);
     }
 
-    public List<Label> labelFind(String name) throws Exception {
+    public List<Label> labelFind(String name) throws ApiException {
         startConnection();
         return new LabelApi(api_client_pool.get(0)).labelListGet("name='" + StringEscapeUtils.escapeSql(name) + "'");
     }
@@ -116,6 +116,11 @@ public class AquariumClient {
             throw new Exception("Application create unable find label " + name);
 
         return labels.stream().max(Comparator.comparing(l -> l.getVersion())).get();
+    }
+
+    public ApplicationTask taskGet(UUID task_uid) throws ApiException {
+        startConnection();
+        return new ApplicationApi(api_client_pool.get(0)).applicationTaskGet(task_uid);
     }
 
     public Application applicationCreate(UUID label_uid, String jenkins_url, String agent_name, String agent_secret, String add_metadata) throws Exception {
@@ -158,13 +163,24 @@ public class AquariumClient {
         return new ApplicationApi(api_client_pool.get(0)).applicationResourceGet(app_uid);
     }
 
-    public void applicationTaskSnapshot(UUID app_uid, ApplicationStatus when, Boolean full) throws Exception {
+    public UUID applicationTaskSnapshot(UUID app_uid, ApplicationStatus when, Boolean full) throws Exception {
         startConnection();
         ApplicationTask task = new ApplicationTask();
         task.setTask("snapshot");
         task.setWhen(when);
         task.setOptions(Collections.singletonMap("full", full));
-        new ApplicationApi(api_client_pool.get(0)).applicationTaskCreatePost(app_uid, task);
+        ApplicationTask out = new ApplicationApi(api_client_pool.get(0)).applicationTaskCreatePost(app_uid, task);
+        return out.getUID();
+    }
+
+    public UUID applicationTaskImage(UUID app_uid, ApplicationStatus when, Boolean full) throws Exception {
+        startConnection();
+        ApplicationTask task = new ApplicationTask();
+        task.setTask("image");
+        task.setWhen(when);
+        task.setOptions(Collections.singletonMap("full", full));
+        ApplicationTask out = new ApplicationApi(api_client_pool.get(0)).applicationTaskCreatePost(app_uid, task);
+        return out.getUID();
     }
 
     public void applicationDeallocate(UUID app_uid) throws Exception {

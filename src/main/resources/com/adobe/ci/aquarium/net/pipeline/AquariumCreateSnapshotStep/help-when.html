@@ -1,0 +1,5 @@
+<div>
+  Describes when to execute the snapshot operation. In theory it could use any of the Application State, but on practice 2 are available: ALLOCATED and DEALLOCATE.</br>
+  * ALLOCATED - means execute the task immediately, while the worker is still online. That could be troublesome since not all the memory caches could be stored on disks.</br>
+  * DEALLOCATE - means when the host is going down, so Fish will stop the VM first then make snapshot then will destroy the VM.
+</div>

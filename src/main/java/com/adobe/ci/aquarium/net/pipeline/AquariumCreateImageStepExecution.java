@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2024 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -27,13 +27,13 @@ import java.util.UUID;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
-public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExecution<String> {
+public class AquariumCreateImageStepExecution extends SynchronousNonBlockingStepExecution<String> {
     private static final long serialVersionUID = 1L;
-    private static final transient Logger LOGGER = Logger.getLogger(AquariumSnapshotStepExecution.class.getName());
+    private static final transient Logger LOGGER = Logger.getLogger(AquariumCreateImageStepExecution.class.getName());
 
-    private final AquariumSnapshotStep step;
+    private final AquariumCreateImageStep step;
 
-    AquariumSnapshotStepExecution(AquariumSnapshotStep step, StepContext context) {
+    AquariumCreateImageStepExecution(AquariumCreateImageStep step, StepContext context) {
         super(context);
         this.step = step;
     }
@@ -56,10 +56,10 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
     @Override
     protected String run() throws Exception {
         boolean full = step.isFull();
-        ApplicationStatus when = step.getWhen();
+        ApplicationStatus when = ApplicationStatus.fromValue(step.getWhen());
 
         try {
-            LOGGER.log(Level.FINE, "Starting containerLog step.");
+            LOGGER.log(Level.FINE, "Starting Aquarium Create Image step.");
 
             Node node = getContext().get(Node.class);
             if( !(node instanceof AquariumSlave) ) {
@@ -70,16 +70,16 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
             UUID app_id = ((AquariumSlave)node).getApplicationUID();
             AquariumCloud cloud = ((AquariumSlave)node).getAquariumCloud();
 
-            cloud.getClient().applicationTaskSnapshot(app_id, when, full);
+            UUID task_uid = cloud.getClient().applicationTaskImage(app_id, when, full);
 
-            return "";
+            return task_uid.toString();
         } catch (InterruptedException e) {
-            String msg = "Interrupted while requesting snapshot of the Application";
+            String msg = "Interrupted while requesting create image of the Application";
             logger().println(msg);
             LOGGER.log(Level.FINE, msg);
             return "";
         } catch (Exception e) {
-            String msg = "Failed to request snapshot of the Application";
+            String msg = "Failed to request create image of the Application";
             logger().println(msg);
             LOGGER.log(Level.WARNING, msg, e);
             return "";
@@ -88,7 +88,7 @@ public class AquariumSnapshotStepExecution extends SynchronousNonBlockingStepExe
 
     @Override
     public void stop(Throwable cause) throws Exception {
-        LOGGER.log(Level.FINE, "Stopping Aquarium snapshot step.");
+        LOGGER.log(Level.FINE, "Stopping Aquarium Create Image step.");
         super.stop(cause);
     }
 }
