@@ -54,7 +54,7 @@
         <aquarium-fish.openapi.spec.path>https://raw.githubusercontent.com/adobe/aquarium-fish/main/docs/openapi.yaml</aquarium-fish.openapi.spec.path>
 
         <workflow-durable-task-step-version>2.35</workflow-durable-task-step-version>
-        <workflow-basic-steps-version>2.22</workflow-basic-steps-version>
+        <workflow-basic-steps-version>2.21</workflow-basic-steps-version>
 
         <swagger-core-version>1.6.2</swagger-core-version>
         <okio-version>2.10.0</okio-version>
