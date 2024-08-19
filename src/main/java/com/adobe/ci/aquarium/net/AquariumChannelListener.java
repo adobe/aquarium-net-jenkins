@@ -10,6 +10,7 @@ import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
 import hudson.model.Executor;
 import hudson.model.Result;
 import hudson.remoting.Channel;
+import org.jenkinsci.plugins.workflow.steps.TimeoutStepExecution.ExceededTimeout;
 
 /**
  * Class to listen for events in the computer channel and take measures in case anything goes wrong
@@ -50,11 +51,10 @@ public class AquariumChannelListener extends Channel.Listener {
 
         if( state.getStatus() != ApplicationStatus.ALLOCATED ) {
             // Aborting all the executors since the Application was deallocated
-            // TODO: Skipping the action for now to not kill the entire pipeline
-            LOG.log(Level.WARNING, "Not killing the pipeline to prevent the entire pipeline to die: " + computer + " with ApplicationUID: " + app_uid);
-            /*for (Executor exec : computer.getAllExecutors()) {
-                exec.interrupt(Result.ABORTED, new AquariumCauseOfInterruption(state.getStatus(), state.getDescription()));
-            }*/
+            for( Executor exec : computer.getAllExecutors() ) {
+                // Using ExceededTimeout here to keep the existing cause timeout detections work as expected
+                exec.interrupt(Result.ABORTED, new ExceededTimeout(), new AquariumCauseOfInterruption(state.getStatus(), state.getDescription()));
+            }
         }
     }
 }
