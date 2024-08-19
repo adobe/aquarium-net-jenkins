@@ -48,11 +48,13 @@ public class AquariumChannelListener extends Channel.Listener {
         LOG.log(Level.WARNING, "Channel is closed on Computer: " + computer + " with ApplicationUID: " + app_uid + ", State: " + state.getStatus() + ": " + state.getDescription() + ", Cause: " + cause);
         computer.getListener().getLogger().println("AquariumChannelListener remote disconnected: ApplicationUID: " + app_uid + ", State: " + state.getStatus() + ": " + state.getDescription() + ", Cause: " + cause);
 
-        if( state.getStatus() == ApplicationStatus.ALLOCATED ) {
+        if( state.getStatus() != ApplicationStatus.ALLOCATED ) {
             // Aborting all the executors since the Application was deallocated
-            for (Executor exec : computer.getAllExecutors()) {
+            // TODO: Skipping the action for now to not kill the entire pipeline
+            LOG.log(Level.WARNING, "Not killing the pipeline to prevent the entire pipeline to die: " + computer + " with ApplicationUID: " + app_uid);
+            /*for (Executor exec : computer.getAllExecutors()) {
                 exec.interrupt(Result.ABORTED, new AquariumCauseOfInterruption(state.getStatus(), state.getDescription()));
-            }
+            }*/
         }
     }
 }
