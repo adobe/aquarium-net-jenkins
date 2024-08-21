@@ -49,10 +49,10 @@ public class AquariumCreateImageStep extends Step implements Serializable {
     @DataBoundSetter
     public void setWhen(String status) {
         if( status.isEmpty() ) {
-            this.when = ApplicationStatus.fromValue(status).toString();
-        } else {
             // Back to default
             this.when = null;
+        } else {
+            this.when = ApplicationStatus.fromValue(status).toString();
         }
     }
 
