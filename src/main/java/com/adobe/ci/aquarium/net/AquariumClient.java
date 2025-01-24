@@ -55,6 +55,9 @@ public class AquariumClient {
             cl.setBasePath(this.node_url);
             cl.setUsername(getBasicAuthCreds(this.cred_id).getUsername());
             cl.setPassword(getBasicAuthCreds(this.cred_id).getPassword().getPlainText());
+            cl.setConnectTimeout(300000); // 5 min
+            cl.setWriteTimeout(300000); // 5 min
+            cl.setReadTimeout(300000); // 5 min
             if( this.ca_cert_id == null || this.ca_cert_id.isEmpty() ) {
                 cl.setVerifyingSsl(false);
             } else {
