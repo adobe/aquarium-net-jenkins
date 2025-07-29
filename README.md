@@ -11,8 +11,8 @@ to allocate the required resources on demand.
 
 ## Build
 
-To build just download the latest maven from apache and run `mvn clean package` - it will create
-the `./target/aquarium-net-jenkins.hpi` file which you can use to install in Jenkins.
+To build just download JDK 11 and the latest maven from apache and run `mvn clean package` - it
+will create the `./target/aquarium-net-jenkins.hpi` file which you can use to install in Jenkins.
 
 If you want to use custom Fish OpenAPI specification during the build - just set the profile to
 `Local`: `mvn clean package -P Local`
