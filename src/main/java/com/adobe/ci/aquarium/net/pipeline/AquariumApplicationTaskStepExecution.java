@@ -1,5 +1,5 @@
 /**
- * Copyright 2024 Adobe. All rights reserved.
+ * Copyright 2024-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -14,8 +14,7 @@
 
 package com.adobe.ci.aquarium.net.pipeline;
 
-import com.adobe.ci.aquarium.fish.client.ApiException;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationTask;
+import aquarium.v2.ApplicationOuterClass.ApplicationTask;
 import com.adobe.ci.aquarium.net.AquariumCloud;
 import hudson.model.TaskListener;
 import hudson.util.LogTaskListener;
@@ -73,28 +72,41 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
                 try {
                     while( true ) {
                         ApplicationTask task = cloud.getClient().taskGet(task_uid);
-                        out = JSONObject.fromObject(task);
-                        JSONObject result = JSONObject.fromObject(task.getResult());
-                        if( !result.isEmpty() || !wait) {
+                        // Convert protobuf to JSONObject for output
+                        if( !task.getResult().toString().isEmpty() || !wait) {
+                            out = JSONObject.fromObject(task);
+                            /* In case JSONObject.fromObject will not work, we can use the following code
+                            out.put("uid", task.getUid());
+                            out.put("application_uid", task.getApplicationUid());
+                            out.put("created_at", task.getCreatedAt().getSeconds());
+                            out.put("updated_at", task.getUpdatedAt().getSeconds());
+                            out.put("task", task.getTask());
+                            out.put("when", task.getWhen().toString());
+                            out.put("options", task.getOptions().toString());
+                            out.put("result", task.getResult().toString());*/
+
                             // No need to wait or we have the result - so returning the task
                             return out;
                         }
                         Thread.sleep(10000);
                     }
-                } catch (ApiException e) {
+                } catch (Exception e) {
                     String msg = "ApplicationTask was not found on AquariumCluster " + cloud.getName();
                     logger().println(msg);
                     LOGGER.log(Level.INFO, msg, e);
                 }
             }
-        } catch (InterruptedException e) {
-            String msg = "Interrupted while requesting ApplicationTask";
-            logger().println(msg);
-            LOGGER.log(Level.FINE, msg);
         } catch (Exception e) {
-            String msg = "Failed to request ApplicationTask";
-            logger().println(msg);
-            LOGGER.log(Level.WARNING, msg, e);
+            if( e instanceof InterruptedException ) {
+                // TODO: Not quite sure interrupt could happen here - better will be to prepare test and check
+                String msg = "Interrupted while requesting ApplicationTask";
+                logger().println(msg);
+                LOGGER.log(Level.FINE, msg);
+            } else {
+                String msg = "Failed to request ApplicationTask";
+                logger().println(msg);
+                LOGGER.log(Level.WARNING, msg, e);
+            }
         }
         return out;
     }

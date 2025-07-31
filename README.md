@@ -3,7 +3,7 @@
 [![CI](https://github.com/adobe/aquarium-net-jenkins/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/adobe/aquarium-net-jenkins/actions/workflows/main.yml)
 
 [Aquarium](https://github.com/adobe/aquarium-fish/wiki/Aquarium) resources manager jenkins plugin
-to allocate the required resources on demand. 
+to allocate the required resources on demand.
 
 ## Requirements
 

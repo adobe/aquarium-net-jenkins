@@ -1,0 +1,15 @@
+<div>
+    Optional regular expression pattern to filter which labels this cloud will serve.
+    <p>
+        If specified, only Fish labels whose names match this pattern will be available for provisioning.
+        If left empty, all labels from the Fish cluster will be available.
+    </p>
+    <p>
+        Example patterns:
+        <ul>
+            <li><code>ubuntu.*</code> - Only labels starting with "ubuntu"</li>
+            <li><code>.*gpu.*</code> - Only labels containing "gpu"</li>
+            <li><code>linux-(16|18|20)</code> - Labels matching linux-16, linux-18, or linux-20</li>
+        </ul>
+    </p>
+</div>

@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2021-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -14,9 +14,8 @@
 
 package com.adobe.ci.aquarium.net;
 
-import com.adobe.ci.aquarium.fish.client.ApiException;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
+import com.adobe.ci.aquarium.net.model.ApplicationState;
+import aquarium.v2.ApplicationOuterClass;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -33,7 +32,7 @@ import jenkins.security.MasterToSlaveCallable;
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
@@ -174,39 +173,9 @@ public class AquariumSlave extends AbstractCloudSlave {
             return;
         }
 
-        // Need to make sure the resource will be deallocated even if there will be some issues with network
-        while( true ) {
-            try {
-                if( this.application_uid != null ) {
-                    ApplicationState state = cloud.getClient().applicationStateGet(this.application_uid);
-                    if (state.getStatus() != ApplicationStatus.ALLOCATED
-                            && state.getStatus() != ApplicationStatus.ELECTED
-                            && state.getStatus() != ApplicationStatus.NEW) {
-                        LOG.log(Level.SEVERE, "The Application is not active: " + state.getStatus());
-                        break;
-                    }
-                    cloud.getClient().applicationDeallocate(this.application_uid);
-                }
-                break;
-            } catch( ApiException e ) {
-                if( e.getCode() == 404 ) {
-                    String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s.",
-                            getCloudName(), this.name, this.application_uid, e.getMessage());
-                    LOG.log(Level.SEVERE, msg);
-                    break;
-                }
-                String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s." +
-                        " Repeating...", getCloudName(), this.name, this.application_uid, e.getMessage());
-                LOG.log(Level.SEVERE, msg);
-            } catch( Exception e ) {
-                String msg = String.format("Error during remove resource from %s for agent %s Application %s: %s.",
-                        getCloudName(), this.name, this.application_uid, e);
-                e.printStackTrace(listener.fatalError(msg));
-                LOG.log(Level.SEVERE, msg);
-                break;
-            }
-            Thread.sleep(5000);
-        }
+        // Application deallocation is now handled by AquariumCloud.onTerminate() via streaming
+        // No need for blocking loops here - the cloud handles cleanup asynchronously
+        LOG.log(Level.INFO, "Agent termination delegated to cloud for proper application cleanup");
 
         String msg = String.format("Disconnected computer %s", name);
         LOG.log(Level.INFO, msg);
@@ -237,7 +206,7 @@ public class AquariumSlave extends AbstractCloudSlave {
         return new AquariumComputer(this);
     }
 
-    @NotNull
+    @Nonnull
     @Override
     public Launcher createLauncher(TaskListener listener) {
         Launcher launcher = super.createLauncher(listener);

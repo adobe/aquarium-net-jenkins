@@ -6,6 +6,10 @@
         <f:textbox/>
     </f:entry>
 
+    <f:entry title="${%Enabled}" field="enabled">
+        <f:checkbox default="true"/>
+    </f:entry>
+
     <f:entry title="${%Aquarium Fish init host}" field="initHostUrl">
         <f:textbox/>
     </f:entry>
@@ -31,6 +35,10 @@
 
     <f:entry title="${%Additional Metadata}" field="metadata">
         <f:textarea/>
+    </f:entry>
+
+    <f:entry title="${%Label Filter}" field="labelFilter">
+        <f:textbox/>
     </f:entry>
 
     <f:entry title="${%Label Mappings}" field="labelMappings">

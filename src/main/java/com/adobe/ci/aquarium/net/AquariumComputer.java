@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2021-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -24,7 +24,7 @@ import hudson.slaves.AbstractCloudComputer;
 import net.sf.json.JSONObject;
 import org.acegisecurity.Authentication;
 import org.jenkinsci.plugins.workflow.support.steps.ExecutorStepExecution.PlaceholderTask;
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import java.io.PrintStream;
 import java.util.logging.Level;
@@ -123,13 +123,13 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
         return String.format("AquariumComputer name: %s slave: %s (%s)", getName(), getNode(), this.getAppInfo());
     }
 
-    @NotNull
+    @Nonnull
     @Override
     public ACL getACL() {
         final ACL base = super.getACL();
         return new ACL() {
             @Override
-            public boolean hasPermission(@NotNull Authentication a, @NotNull Permission permission) {
+            public boolean hasPermission(@Nonnull Authentication a, @Nonnull Permission permission) {
                 return permission == Computer.CONFIGURE ? false : base.hasPermission(a,permission);
             }
         };
