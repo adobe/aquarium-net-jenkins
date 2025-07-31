@@ -15,6 +15,8 @@
 package com.adobe.ci.aquarium.net;
 
 import aquarium.v2.*;
+import aquarium.v2.UserOuterClass.User;
+
 import com.adobe.ci.aquarium.net.config.AquariumCloudConfiguration;
 import com.adobe.ci.aquarium.net.model.Application;
 import com.adobe.ci.aquarium.net.model.ApplicationState;
@@ -48,7 +50,6 @@ public class AquariumClient {
     private final AquariumCloudConfiguration config;
     private ManagedChannel channel;
     private StreamingServiceGrpc.StreamingServiceStub streamingStub;
-    private UserServiceGrpc.UserServiceBlockingStub userStub; // Only for GetMe unary call
 
     // Streaming connections
     private StreamObserver<Streaming.StreamingServiceConnectRequest> connectStream;
@@ -123,9 +124,8 @@ public class AquariumClient {
 
         this.channel = channelBuilder.build();
 
-        // Create stubs
+        // Create streaming stub
         this.streamingStub = StreamingServiceGrpc.newStub(channel);
-        this.userStub = UserServiceGrpc.newBlockingStub(channel); // Only for GetMe connection test
 
         // Establish streaming connections
         establishStreams();
@@ -287,20 +287,6 @@ public class AquariumClient {
     }
 
     /**
-     * Test connection by calling UserService.GetMe (unary call)
-     */
-    public void testConnection() throws Exception {
-        UserOuterClass.UserServiceGetMeRequest request = UserOuterClass.UserServiceGetMeRequest.newBuilder().build();
-        UserOuterClass.UserServiceGetMeResponse response = userStub.getMe(request);
-
-        if (!response.getStatus()) {
-            throw new RuntimeException("Connection test failed: " + response.getMessage());
-        }
-
-        LOGGER.info("Connection test successful, connected as: " + response.getData().getName());
-    }
-
-    /**
      * Send a request through the Connect stream and wait for response
      */
     private Streaming.StreamingServiceConnectResponse sendStreamRequest(String requestType, com.google.protobuf.Any requestData) throws Exception {
@@ -332,6 +318,21 @@ public class AquariumClient {
             pendingRequests.remove(requestId);
             throw e;
         }
+    }
+
+    /**
+     * Test connection by calling UserService.GetMe
+     */
+    public User getMe() throws Exception {
+        UserOuterClass.UserServiceGetMeRequest request = UserOuterClass.UserServiceGetMeRequest.newBuilder().build();
+
+        Streaming.StreamingServiceConnectResponse response = sendStreamRequest("UserServiceGetMeRequest",
+            com.google.protobuf.Any.pack(request));
+
+        UserOuterClass.UserServiceGetMeResponse userResponse = response.getResponseData()
+            .unpack(UserOuterClass.UserServiceGetMeResponse.class);
+
+        return userResponse.getData();
     }
 
     /**

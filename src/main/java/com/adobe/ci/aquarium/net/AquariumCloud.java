@@ -38,6 +38,8 @@ import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import aquarium.v2.ApplicationOuterClass;
+import aquarium.v2.UserOuterClass;
+
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
@@ -942,9 +944,10 @@ public class AquariumCloud extends Cloud {
                         .certificate(getCACertificateForId(caCredentialsId))
                         .build();
                 AquariumClient client = new AquariumClient(config);
-                client.testConnection();
+                client.connect();
+                UserOuterClass.User user = client.getMe();
                 // Request went with no exceptions - so we're good
-                return FormValidation.ok("Connected to Aquarium Fish node successfully");
+                return FormValidation.ok("Connected to Aquarium Fish node successfully as " + user.getName());
             } catch( Exception e ) {
                 LOG.log(Level.WARNING, String.format("Error testing connection %s", initHostUrl), e);
                 return FormValidation.error("Error testing connection %s: %s", initHostUrl, e.getMessage());
