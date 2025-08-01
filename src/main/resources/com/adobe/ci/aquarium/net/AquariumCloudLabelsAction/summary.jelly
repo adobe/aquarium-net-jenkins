@@ -3,12 +3,14 @@
 <?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
     <h2>Aquarium Labels:</h2>
-    <table><tr><th>Label:Version</th><th>Created</th><th>Definition/Metadata</th></tr>
+    <table class="bigtable sortable">
+        <tr><th width="40%">Label:Version</th><th width="20%">Created</th><th width="40%">Definition/Metadata</th></tr>
         <j:forEach items="${it.labelsLatest}" var="label">
-            <tr><td><b>${label.get("name")}</b>:${label.get("version")}</td><td>${label.get("createdAt")}</td><td><f:advanced>
-                <p>Definitions:<pre>${label.getJSONArray("definitions").toString(2)}</pre></p>
-                <p>Metadata:<pre>${label.getJSONObject("metadata").toString(2)}</pre></p>
-            </f:advanced></td></tr>
+            <tr>
+                <td><b>${label.name}</b>:${label.version}</td>
+                <td>${label.createdAt}</td>
+                <td><f:advanced><pre>${label.yamlDescription}</pre></f:advanced></td>
+            </tr>
         </j:forEach>
     </table>
 </j:jelly>

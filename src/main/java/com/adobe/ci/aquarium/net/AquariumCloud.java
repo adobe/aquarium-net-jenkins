@@ -81,23 +81,21 @@ public class AquariumCloud extends Cloud {
     // A collection of labels supported by the Aquarium Fish cluster
     private final Map<String, com.adobe.ci.aquarium.net.model.Label> fishLabelsCache = new ConcurrentHashMap<>();
     private Set<LabelAtom> labelsCached;
-    private long labelsCachedUpdateTime = 0;
     private AquariumClient client;
     private volatile boolean connected = false;
 
     @DataBoundConstructor
     public AquariumCloud(String name) {
         super(name);
-        LOG.log(Level.INFO, "STARTING Aquarium CLOUD");
-        // Client will be initialized when configuration is complete
+        LOG.info("STARTING Aquarium CLOUD");
     }
 
     /**
      * Initialize the client connection and start streaming if enabled
      */
     private void initializeConnection() {
-        if (!enabled) {
-            LOG.log(Level.INFO, "Aquarium cloud" + name + " is disabled, skip connection");
+        if (!enabled || initAddressUrl == null) {
+            LOG.info("Aquarium cloud" + name + " is disabled, skip connection");
             return;
         }
 
@@ -110,11 +108,21 @@ public class AquariumCloud extends Cloud {
             setupLabelListeners();
             client.connect();
             connected = true;
-            refreshLabelsFromStream();
+            refreshLabels();
             LOG.log(Level.INFO, "Connected to Aquarium Fish node for cloud " + name);
         } catch (Exception e) {
             LOG.log(Level.SEVERE, "Failed to connect to Aquarium Fish node for cloud '" + name + "'", e);
             connected = false;
+        }
+    }
+
+    /**
+     * Ensure the connection to the Aquarium Fish node is established
+     */
+    public void ensureConnected() {
+        // Initialize connection if needed
+        if (!connected) {
+            initializeConnection();
         }
     }
 
@@ -157,7 +165,7 @@ public class AquariumCloud extends Cloud {
                 connected = isConnected;
                 if (isConnected) {
                     LOG.log(Level.INFO, "Reconnected to Aquarium Fish node for cloud " + name);
-                    refreshLabelsFromStream();
+                    refreshLabels();
                 } else {
                     LOG.log(Level.WARNING, "Lost connection to Aquarium Fish node for cloud " + name);
                 }
@@ -183,7 +191,7 @@ public class AquariumCloud extends Cloud {
     /**
      * Refresh labels from the streaming service
      */
-    private void refreshLabelsFromStream() {
+    private void refreshLabels() {
         try {
             List<com.adobe.ci.aquarium.net.model.Label> labels = client.listLabels();
             fishLabelsCache.clear();
@@ -211,7 +219,6 @@ public class AquariumCloud extends Cloud {
             newLabels.add(LabelAtom.get(fishLabel.getName() + ":" + fishLabel.getVersion()));
         }
         labelsCached = newLabels;
-        labelsCachedUpdateTime = System.currentTimeMillis();
         LOG.log(Level.FINE, "Updated Jenkins labels cache with " + newLabels.size() + " labels");
     }
 
@@ -514,14 +521,6 @@ public class AquariumCloud extends Cloud {
         }
 
         try {
-            // Update the cache if time has come (refresh every 5 minutes)
-            long cacheRefreshInterval = 5 * 60 * 1000; // 5 minutes
-            if (this.labelsCachedUpdateTime < System.currentTimeMillis() - cacheRefreshInterval) {
-                if (connected && client != null) {
-                    refreshLabelsFromStream();
-                }
-            }
-
             // If we have no labels cached, return false
             if (this.labelsCached == null || this.labelsCached.isEmpty()) {
                 LOG.log(Level.INFO, "No labels cached.");
@@ -552,7 +551,7 @@ public class AquariumCloud extends Cloud {
     public void updateLabelsCache() throws Exception {
         // Delegate to the new streaming method
         if (connected && client != null) {
-            refreshLabelsFromStream();
+            refreshLabels();
         }
     }
 

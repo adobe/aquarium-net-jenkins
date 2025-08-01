@@ -14,7 +14,13 @@ package com.adobe.ci.aquarium.net;
 
 import com.adobe.ci.aquarium.net.model.Label;
 import hudson.Extension;
-import hudson.model.ManagementLink;
+import hudson.model.Action;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import jenkins.model.TransientActionFactory;
+import org.kohsuke.accmod.Restricted;
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 import jenkins.model.Jenkins;
 
 import javax.annotation.Nonnull;
@@ -22,98 +28,78 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Management link to display available Aquarium Fish labels
+ * Attach available labels to the AquariumCloud status/index page
  */
-@Extension
-public class AquariumCloudLabelsAction extends ManagementLink {
+@Restricted(NoExternalUse.class)
+public class AquariumCloudLabelsAction implements Action {
+    public final AquariumCloud cloud;
 
-    @Override
-    public String getIconFileName() {
-        return "symbol-fish";
+    public AquariumCloudLabelsAction(AquariumCloud cloud) {
+        this.cloud = cloud;
     }
 
+    // Empty constructor for InjectedTest tests only
+    public AquariumCloudLabelsAction() {
+        this.cloud = null;
+    }
+
+    // We don't need to display the menu item - just to show summary, so returning null for required methods
+    @CheckForNull
+    @Override
+    public String getIconFileName() {
+        return null;
+    }
+
+    @CheckForNull
     @Override
     public String getDisplayName() {
-        return "Aquarium Fish Labels";
+        return null;
     }
 
     @Override
     public String getUrlName() {
-        return "aquarium-labels";
-    }
-
-    @Override
-    public String getDescription() {
-        return "View all available Fish labels from Aquarium clusters";
+        return null;
     }
 
     /**
      * Get all Fish labels from all configured Aquarium clouds
      */
-    public List<LabelInfo> getAllLabels() {
-        List<LabelInfo> allLabels = new ArrayList<>();
+    public List<LabelInfo> getLabelsLatest() {
+        cloud.ensureConnected();
+        TreeMap<String, Label> latestLabels = new TreeMap<String, Label>();
 
-        for (hudson.slaves.Cloud cloud : Jenkins.get().clouds) {
-            if (cloud instanceof AquariumCloud) {
-                AquariumCloud aquariumCloud = (AquariumCloud) cloud;
+        // Get labels from the cloud's cache
+        List<Label> fishLabels = new ArrayList<Label>(cloud.getFishLabelsCache().values());
 
-                // Get labels from the cloud's cache
-                Map<String, Label> fishLabels = aquariumCloud.getFishLabelsCache();
-                for (Label fishLabel : fishLabels.values()) {
-                    LabelInfo labelInfo = new LabelInfo(
-                        fishLabel.getName(),
-                        fishLabel.getVersion(),
-                        DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(fishLabel.getCreatedAt()),
-                        fishLabel.getYamlDescription(),
-                        aquariumCloud.getName(),
-                        aquariumCloud.isConnected()
-                    );
-                    allLabels.add(labelInfo);
-                }
+        // Filtering to keep only the latest ones
+        for( Label label : fishLabels ) {
+            Label latestLabel = latestLabels.get(label.getName());
+            if( latestLabel == null || latestLabel.getVersion() < label.getVersion() ) {
+                latestLabels.put(label.getName(), label);
             }
         }
 
-        // Sort by cloud name, then by label name, then by version (descending)
-        allLabels.sort((a, b) -> {
-            int cloudCompare = a.cloudName.compareTo(b.cloudName);
-            if (cloudCompare != 0) return cloudCompare;
+        // Prepare the JSON array
+        List<LabelInfo> out = new ArrayList<LabelInfo>();
+        for( Label label : latestLabels.values() ) {
+            out.add(new LabelInfo(label.getName(), label.getVersion(), label.getCreatedAt().toString(), label.getYamlDescription()));
+        }
 
-            int nameCompare = a.name.compareTo(b.name);
-            if (nameCompare != 0) return nameCompare;
-
-            return Integer.compare(b.version, a.version); // Descending version
-        });
-
-        return allLabels;
+        return out;
     }
 
-    /**
-     * Get summary statistics
-     */
-    public Map<String, Object> getSummary() {
-        Map<String, Object> summary = new HashMap<>();
-        List<LabelInfo> allLabels = getAllLabels();
-
-        summary.put("totalLabels", allLabels.size());
-
-        Set<String> uniqueLabels = new HashSet<>();
-        Set<String> connectedClouds = new HashSet<>();
-        Set<String> disconnectedClouds = new HashSet<>();
-
-        for (LabelInfo label : allLabels) {
-            uniqueLabels.add(label.name);
-            if (label.cloudConnected) {
-                connectedClouds.add(label.cloudName);
-            } else {
-                disconnectedClouds.add(label.cloudName);
-            }
+    @Extension
+    public static final class CloudActionFactory extends TransientActionFactory<AquariumCloud> {
+        @Override
+        public Class<AquariumCloud> type() {
+            return AquariumCloud.class;
         }
 
-        summary.put("uniqueLabels", uniqueLabels.size());
-        summary.put("connectedClouds", connectedClouds.size());
-        summary.put("disconnectedClouds", disconnectedClouds.size());
-
-        return summary;
+        @Nonnull
+        @Override
+        public Collection<? extends Action> createFor(@Nonnull AquariumCloud cloud) {
+            return Collections.singletonList(new AquariumCloudLabelsAction(cloud));
+        }
     }
 
     /**
@@ -124,25 +110,18 @@ public class AquariumCloudLabelsAction extends ManagementLink {
         public final int version;
         public final String createdAt;
         public final String yamlDescription;
-        public final String cloudName;
-        public final boolean cloudConnected;
 
-        public LabelInfo(String name, int version, String createdAt, String yamlDescription,
-                        String cloudName, boolean cloudConnected) {
+        public LabelInfo(String name, int version, String createdAt, String yamlDescription) {
             this.name = name;
             this.version = version;
             this.createdAt = createdAt;
             this.yamlDescription = yamlDescription;
-            this.cloudName = cloudName;
-            this.cloudConnected = cloudConnected;
         }
 
         public String getName() { return name; }
         public int getVersion() { return version; }
         public String getCreatedAt() { return createdAt; }
         public String getYamlDescription() { return yamlDescription; }
-        public String getCloudName() { return cloudName; }
-        public boolean isCloudConnected() { return cloudConnected; }
         public String getFullName() { return name + ":" + version; }
-    }
+     }
 }
