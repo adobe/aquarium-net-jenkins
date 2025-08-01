@@ -23,7 +23,7 @@ import org.kohsuke.stapler.DataBoundConstructor;
  */
 public class AquariumCloudConfiguration {
     private final boolean enabled;
-    private final String initHost;
+    private final String initAddress;
     private final String username;
     private final Secret password;
     private final String certificate;
@@ -34,7 +34,7 @@ public class AquariumCloudConfiguration {
 
     @DataBoundConstructor
     public AquariumCloudConfiguration(boolean enabled,
-                                    String initHost,
+                                    String initAddress,
                                     String username,
                                     Secret password,
                                     String certificate,
@@ -43,7 +43,7 @@ public class AquariumCloudConfiguration {
                                     String additionalMetadata,
                                     String labelFilter) {
         this.enabled = enabled;
-        this.initHost = initHost;
+        this.initAddress = initAddress;
         this.username = username;
         this.password = password;
         this.certificate = certificate;
@@ -58,8 +58,8 @@ public class AquariumCloudConfiguration {
         return enabled;
     }
 
-    public String getInitHost() {
-        return initHost;
+    public String getInitAddress() {
+        return initAddress;
     }
 
     public String getUsername() {
@@ -99,7 +99,7 @@ public class AquariumCloudConfiguration {
      */
     public static class Builder {
         private boolean enabled = true;
-        private String initHost;
+        private String initAddress;
         private String username;
         private String password;
         private String certificate;
@@ -113,8 +113,8 @@ public class AquariumCloudConfiguration {
             return this;
         }
 
-        public Builder initHost(String initHost) {
-            this.initHost = initHost;
+        public Builder initAddress(String initAddress) {
+            this.initAddress = initAddress;
             return this;
         }
 
@@ -155,7 +155,7 @@ public class AquariumCloudConfiguration {
 
         public AquariumCloudConfiguration build() {
             return new AquariumCloudConfiguration(
-                enabled, initHost, username,
+                enabled, initAddress, username,
                 password != null ? Secret.fromString(password) : null,
                 certificate, agentConnectionWaitMinutes, jenkinsUrl,
                 additionalMetadata, labelFilter
@@ -167,7 +167,7 @@ public class AquariumCloudConfiguration {
     public String toString() {
         return "AquariumCloudConfiguration{" +
                 "enabled=" + enabled +
-                ", initHost='" + initHost + '\'' +
+                ", initAddress='" + initAddress + '\'' +
                 ", username='" + username + '\'' +
                 ", agentConnectionWaitMinutes=" + agentConnectionWaitMinutes +
                 ", jenkinsUrl='" + jenkinsUrl + '\'' +

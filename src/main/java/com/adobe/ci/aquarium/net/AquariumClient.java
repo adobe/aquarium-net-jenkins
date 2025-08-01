@@ -56,10 +56,17 @@ public class AquariumClient {
     private StreamObserver<Streaming.StreamingServiceSubscribeRequest> subscribeStream;
     private volatile boolean connected = false;
 
+    // Connection establishment tracking
+    private volatile boolean connectStreamEstablished = false;
+    private volatile boolean subscribeStreamEstablished = false;
+    private volatile Throwable connectionError = null;
+    private final Object connectionLock = new Object();
+
     // Request tracking for bidirectional streaming
     private final Map<String, CompletableFuture<Streaming.StreamingServiceConnectResponse>> pendingRequests = new ConcurrentHashMap<>();
 
     // Reconnection handling
+    private volatile boolean reconnect = false;
     private final ScheduledExecutorService reconnectionScheduler = Executors.newScheduledThreadPool(1);
     private volatile boolean reconnectionScheduled = false;
 
@@ -82,8 +89,9 @@ public class AquariumClient {
         void onConnectionStatusChanged(boolean connected);
     }
 
-    public AquariumClient(AquariumCloudConfiguration config) {
+    public AquariumClient(AquariumCloudConfiguration config, boolean reconnect) {
         this.config = config;
+        this.reconnect = reconnect;
     }
 
     /**
@@ -94,7 +102,7 @@ public class AquariumClient {
             return;
         }
 
-        String[] hostParts = config.getInitHost().split(":");
+        String[] hostParts = config.getInitAddress().split(":");
         String host = hostParts[0];
         int port = hostParts.length > 1 ? Integer.parseInt(hostParts[1]) : 8001;
 
@@ -127,12 +135,42 @@ public class AquariumClient {
         // Create streaming stub
         this.streamingStub = StreamingServiceGrpc.newStub(channel);
 
+        // Reset connection tracking
+        connectStreamEstablished = false;
+        subscribeStreamEstablished = false;
+        connectionError = null;
+
         // Establish streaming connections
         establishStreams();
 
+        // Wait for both streams to be established or for an error to occur
+        synchronized (connectionLock) {
+            long startTime = System.currentTimeMillis();
+            long timeout = 30000; // 30 seconds timeout
+
+            while (!connectStreamEstablished || !subscribeStreamEstablished) {
+                if (connectionError != null) {
+                    // An error occurred during stream establishment
+                    throw new RuntimeException("Failed to establish streaming connections: " + connectionError.toString(), connectionError);
+                }
+
+                long elapsed = System.currentTimeMillis() - startTime;
+                if (elapsed >= timeout) {
+                    throw new RuntimeException("Timeout waiting for streaming connections to be established");
+                }
+
+                try {
+                    connectionLock.wait(1000); // Wait 1 second at a time
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Connection establishment was interrupted", e);
+                }
+            }
+        }
+
         this.connected = true;
         notifyConnectionStatusChanged(true);
-        LOGGER.info("Successfully connected to Aquarium Fish at " + config.getInitHost());
+        LOGGER.info("Successfully connected to Aquarium Fish at " + config.getInitAddress());
     }
 
     /**
@@ -143,12 +181,23 @@ public class AquariumClient {
         connectStream = streamingStub.connect(new StreamObserver<Streaming.StreamingServiceConnectResponse>() {
             @Override
             public void onNext(Streaming.StreamingServiceConnectResponse response) {
+                // Mark streams as established if no immediate errors occurred
+                synchronized (connectionLock) {
+                    if (!connectStreamEstablished) {
+                        connectStreamEstablished = true;
+                    }
+                }
                 handleConnectResponse(response);
             }
 
             @Override
             public void onError(Throwable t) {
                 LOGGER.log(Level.WARNING, "Connect stream error", t);
+                synchronized (connectionLock) {
+                    connectionError = t;
+                    connectStreamEstablished = false;
+                    connectionLock.notifyAll();
+                }
                 connected = false;
                 notifyConnectionStatusChanged(false);
                 scheduleReconnection();
@@ -157,6 +206,10 @@ public class AquariumClient {
             @Override
             public void onCompleted() {
                 LOGGER.info("Connect stream completed");
+                synchronized (connectionLock) {
+                    connectStreamEstablished = false;
+                    connectionLock.notifyAll();
+                }
                 connected = false;
                 notifyConnectionStatusChanged(false);
                 scheduleReconnection();
@@ -168,12 +221,23 @@ public class AquariumClient {
                 new StreamObserver<Streaming.StreamingServiceSubscribeResponse>() {
             @Override
             public void onNext(Streaming.StreamingServiceSubscribeResponse response) {
+                // Mark streams as established if no immediate errors occurred
+                synchronized (connectionLock) {
+                    if (!subscribeStreamEstablished) {
+                        subscribeStreamEstablished = true;
+                    }
+                }
                 handleSubscribeResponse(response);
             }
 
             @Override
             public void onError(Throwable t) {
                 LOGGER.log(Level.WARNING, "Subscribe stream error", t);
+                synchronized (connectionLock) {
+                    connectionError = t;
+                    subscribeStreamEstablished = false;
+                    connectionLock.notifyAll();
+                }
                 connected = false;
                 notifyConnectionStatusChanged(false);
                 scheduleReconnection();
@@ -182,6 +246,10 @@ public class AquariumClient {
             @Override
             public void onCompleted() {
                 LOGGER.info("Subscribe stream completed");
+                synchronized (connectionLock) {
+                    subscribeStreamEstablished = false;
+                    connectionLock.notifyAll();
+                }
                 connected = false;
                 notifyConnectionStatusChanged(false);
                 scheduleReconnection();
@@ -194,13 +262,27 @@ public class AquariumClient {
                 .addSubscriptionTypes(Streaming.SubscriptionType.SUBSCRIPTION_TYPE_LABEL)
                 .build();
 
-        streamingStub.subscribe(subscribeRequest, subscribeResponseObserver);
+        try {
+            streamingStub.subscribe(subscribeRequest, subscribeResponseObserver);
+        } catch (Exception e) {
+            // If subscribe request fails immediately, mark as error
+            synchronized (connectionLock) {
+                connectionError = e;
+                subscribeStreamEstablished = false;
+                connectionLock.notifyAll();
+            }
+            throw e;
+        }
     }
 
     /**
      * Schedule reconnection attempt after 10 seconds
      */
     private void scheduleReconnection() {
+        if(!reconnect) {
+            return;
+        }
+
         if (!reconnectionScheduled) {
             reconnectionScheduled = true;
             reconnectionScheduler.schedule(() -> {
@@ -244,6 +326,8 @@ public class AquariumClient {
                 // Complete successfully with the response
                 pendingRequest.complete(response);
             }
+        } else if (requestId.equals("keep-alive")) {
+            LOGGER.fine("Received keep-alive response");
         } else {
             LOGGER.warning("Received response for unknown request ID: " + requestId);
         }
@@ -595,6 +679,9 @@ public class AquariumClient {
     public void disconnect() {
         try {
             connected = false;
+            connectStreamEstablished = false;
+            subscribeStreamEstablished = false;
+            connectionError = null;
             notifyConnectionStatusChanged(false);
 
             if (connectStream != null) {

@@ -68,7 +68,7 @@ public class AquariumCloud extends Cloud {
     private static final int DEFAULT_AGENT_CONNECTION_WAIT_MIN = 10;
 
     private boolean enabled = true;
-    private String initHostUrl;
+    private String initAddressUrl;
     @CheckForNull
     private String credentialsId;
     private String caCredentialsId;
@@ -97,7 +97,7 @@ public class AquariumCloud extends Cloud {
      */
     private void initializeConnection() {
         if (!enabled) {
-            LOG.log(Level.INFO, "Aquarium cloud '{}' is disabled, skip connection", name);
+            LOG.log(Level.INFO, "Aquarium cloud" + name + " is disabled, skip connection");
             return;
         }
 
@@ -111,7 +111,7 @@ public class AquariumCloud extends Cloud {
             client.connect();
             connected = true;
             refreshLabelsFromStream();
-            LOG.log(Level.INFO, "Connected to Aquarium Fish node for cloud '{}'", name);
+            LOG.log(Level.INFO, "Connected to Aquarium Fish node for cloud " + name);
         } catch (Exception e) {
             LOG.log(Level.SEVERE, "Failed to connect to Aquarium Fish node for cloud '" + name + "'", e);
             connected = false;
@@ -156,10 +156,10 @@ public class AquariumCloud extends Cloud {
             public void onConnectionStatusChanged(boolean isConnected) {
                 connected = isConnected;
                 if (isConnected) {
-                    LOG.log(Level.INFO, "Reconnected to Aquarium Fish node for cloud '{}'", name);
+                    LOG.log(Level.INFO, "Reconnected to Aquarium Fish node for cloud " + name);
                     refreshLabelsFromStream();
                 } else {
-                    LOG.log(Level.WARNING, "Lost connection to Aquarium Fish node for cloud '{}'", name);
+                    LOG.log(Level.WARNING, "Lost connection to Aquarium Fish node for cloud " + name);
                 }
             }
         });
@@ -219,7 +219,7 @@ public class AquariumCloud extends Cloud {
     public String getName() { return this.name; }
 
     // Used by jelly
-    public String getInitHostUrl() { return this.initHostUrl; }
+    public String getInitAddressUrl() { return this.initAddressUrl; }
 
     // Used by jelly
     @Nullable
@@ -263,9 +263,16 @@ public class AquariumCloud extends Cloud {
     }
 
     public AquariumClient newClient() {
+        String address = "localhost:8001";
+        try {
+            URL url = new URL(this.initAddressUrl);
+            address = url.getHost() + ":" + url.getPort();
+        } catch (MalformedURLException e) {
+            LOG.log(Level.WARNING, "Invalid initAddressUrl, using default localhost:8001: " + this.initAddressUrl, e);
+        }
         AquariumCloudConfiguration config = new AquariumCloudConfiguration.Builder()
                 .enabled(this.enabled)
-                .initHost(this.initHostUrl)
+                .initAddress(address)
                 .username(this.getCredentialsUsername())
                 .password(this.getCredentialsPassword())
                 .certificate(this.getCACertificate())
@@ -274,7 +281,7 @@ public class AquariumCloud extends Cloud {
                 .additionalMetadata(this.metadata)
                 .labelFilter(this.labelFilter)
                 .build();
-        return new AquariumClient(config);
+        return new AquariumClient(config, true);
     }
 
     public AquariumClient getClient() {
@@ -340,8 +347,8 @@ public class AquariumCloud extends Cloud {
     }
 
     @DataBoundSetter
-    public void setInitHostUrl(String value) {
-        this.initHostUrl = Util.fixEmptyAndTrim(value);
+    public void setInitAddressUrl(String value) {
+        this.initAddressUrl = Util.fixEmptyAndTrim(value);
     }
 
     @DataBoundSetter
@@ -377,11 +384,11 @@ public class AquariumCloud extends Cloud {
         // Handle state change
         if (wasEnabled && !enabled) {
             // Cloud was disabled - initiate graceful shutdown
-            LOG.log(Level.INFO, "Aquarium cloud '{}' disabled, initiating graceful shutdown", name);
+            LOG.log(Level.INFO, "Aquarium cloud " + name + " disabled, initiating graceful shutdown");
             initiateGracefulShutdown();
         } else if (!wasEnabled && enabled) {
             // Cloud was enabled - initialize connection
-            LOG.log(Level.INFO, "Aquarium cloud '{}' enabled, initializing connection", name);
+            LOG.log(Level.INFO, "Aquarium cloud " + name + " enabled, initializing connection");
             initializeConnection();
         }
     }
@@ -398,7 +405,7 @@ public class AquariumCloud extends Cloud {
             disconnectFromFish();
         } else {
             // Active nodes exist, wait for them to complete
-            LOG.log(Level.INFO, "Found {} active nodes, waiting for completion before shutdown", activeNodes.size());
+            LOG.log(Level.INFO, "Found " + activeNodes.size() + " active nodes, waiting for completion before shutdown");
 
             // Set up monitoring for node completion
             scheduleShutdownCheck(activeNodes);
@@ -453,7 +460,7 @@ public class AquariumCloud extends Cloud {
                     disconnectFromFish();
                     this.cancel(); // Stop the timer
                 } else {
-                    LOG.log(Level.INFO, "Still waiting for {} nodes to complete", currentActiveNodes.size());
+                    LOG.log(Level.INFO, "Still waiting for " + currentActiveNodes.size() + " nodes to complete");
                 }
             }
         }, 30000, 30000); // Check every 30 seconds
@@ -466,7 +473,7 @@ public class AquariumCloud extends Cloud {
         if (client != null) {
             try {
                 client.disconnect();
-                LOG.log(Level.INFO, "Disconnected from Aquarium Fish node for cloud '{}'", name);
+                LOG.log(Level.INFO, "Disconnected from Aquarium Fish node for cloud " + name);
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Error disconnecting from Fish node", e);
             } finally {
@@ -928,7 +935,7 @@ public class AquariumCloud extends Cloud {
         @RequirePOST
         @SuppressWarnings("unused") // used by jelly
         public FormValidation doTestConnection(@QueryParameter String name,
-                                               @QueryParameter String initHostUrl,
+                                               @QueryParameter String initAddressUrl,
                                                @QueryParameter String credentialsId,
                                                @QueryParameter String caCredentialsId) {
             Jenkins.get().checkPermission(Jenkins.ADMINISTER);
@@ -937,25 +944,31 @@ public class AquariumCloud extends Cloud {
                 return FormValidation.error("name is required");
 
             try {
+                URL address = new URL(initAddressUrl);
                 AquariumCloudConfiguration config = new AquariumCloudConfiguration.Builder()
-                        .initHost(initHostUrl)
+                        .initAddress(address.getHost() + ":" + address.getPort())
                         .username(getCredentialsUsernameForId(credentialsId))
                         .password(getCredentialsPasswordForId(credentialsId))
                         .certificate(getCACertificateForId(caCredentialsId))
                         .build();
-                AquariumClient client = new AquariumClient(config);
+                AquariumClient client = new AquariumClient(config, false);
                 client.connect();
                 UserOuterClass.User user = client.getMe();
+                client.disconnect();
                 // Request went with no exceptions - so we're good
                 return FormValidation.ok("Connected to Aquarium Fish node successfully as " + user.getName());
             } catch( Exception e ) {
-                LOG.log(Level.WARNING, String.format("Error testing connection %s", initHostUrl), e);
-                return FormValidation.error("Error testing connection %s: %s", initHostUrl, e.getMessage());
+                LOG.log(Level.WARNING, String.format("Error testing connection %s", initAddressUrl), e);
+                Throwable rootCause = e;
+                while (rootCause.getCause() != null) {
+                    rootCause = rootCause.getCause();
+                }
+                return FormValidation.error("Error testing connection %s: %s", initAddressUrl, rootCause.getMessage());
             }
         }
 
         @SuppressWarnings("unused") // used by jelly
-        public FormValidation doCheckInitHostUrl(@QueryParameter String value) {
+        public FormValidation doCheckInitAddressUrl(@QueryParameter String value) {
             try {
                 if( !isEmpty(value) ) {
                     new URL(value);
