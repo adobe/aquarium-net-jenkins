@@ -14,7 +14,7 @@
 
 package com.adobe.ci.aquarium.net;
 
-import edu.umd.cs.findbugs.annotations.NonNull;
+import javax.annotation.Nonnull;
 import hudson.Extension;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
@@ -55,8 +55,8 @@ public class LabelMapping extends AbstractDescribableImpl<LabelMapping> implemen
     /**
      * Finds all the matching labels for specified label
      */
-    @NonNull
-    static String getLabels(@NonNull Iterable<LabelMapping> labels, String label) {
+    @Nonnull
+    static String getLabels(@Nonnull Iterable<LabelMapping> labels, String label) {
         List<String> found_labels = new ArrayList<>();
         for (LabelMapping labelMapping : labels) {
             if( Pattern.compile(labelMapping.getPattern()).matcher(label).matches() ) {
@@ -70,7 +70,7 @@ public class LabelMapping extends AbstractDescribableImpl<LabelMapping> implemen
     @Symbol("labelMapping")
     public static class DescriptorImpl extends Descriptor<LabelMapping> {
         @Override
-        @NonNull
+        @Nonnull
         public String getDisplayName() {
             return "Label Mapping";
         }

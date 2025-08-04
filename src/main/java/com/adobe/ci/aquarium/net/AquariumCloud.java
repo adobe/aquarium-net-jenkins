@@ -91,6 +91,21 @@ public class AquariumCloud extends Cloud {
     }
 
     /**
+     * Constructor for integration tests
+     * @param name
+     */
+    public AquariumCloud(String name, AquariumCloudConfiguration config) {
+        super(name);
+        this.enabled = config.isEnabled();
+        this.initAddressUrl = config.getInitAddress();
+        this.agentConnectWaitMin = config.getAgentConnectionWaitMinutes();
+        this.jenkinsUrl = config.getJenkinsUrl();
+        this.metadata = config.getAdditionalMetadata();
+        this.labelFilter = config.getLabelFilter();
+        LOG.info("STARTING Aquarium CLOUD");
+    }
+
+    /**
      * Initialize the client connection and start streaming if enabled
      */
     private void initializeConnection() {

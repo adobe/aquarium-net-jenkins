@@ -15,7 +15,6 @@ package com.adobe.ci.aquarium.net;
 import com.adobe.ci.aquarium.net.model.Label;
 import hudson.Extension;
 import hudson.model.Action;
-import edu.umd.cs.findbugs.annotations.CheckForNull;
 import jenkins.model.TransientActionFactory;
 import org.kohsuke.accmod.Restricted;
 import net.sf.json.JSONArray;
@@ -44,13 +43,11 @@ public class AquariumCloudLabelsAction implements Action {
     }
 
     // We don't need to display the menu item - just to show summary, so returning null for required methods
-    @CheckForNull
     @Override
     public String getIconFileName() {
         return null;
     }
 
-    @CheckForNull
     @Override
     public String getDisplayName() {
         return null;

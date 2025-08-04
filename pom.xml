@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>plugin</artifactId>
-        <version>4.10</version>
+        <version>4.40</version>
         <relativePath />
     </parent>
 
@@ -103,6 +103,12 @@
             <artifactId>annotations-api</artifactId>
             <version>6.0.53</version>
         </dependency-->
+        <!-- Required by dependency parent pom 4.40 -->
+        <dependency>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+            <version>1.4.7</version>
+        </dependency>
 
         <!-- Integration test dependencies -->
         <dependency>
