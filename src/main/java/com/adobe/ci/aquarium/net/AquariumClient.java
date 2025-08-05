@@ -115,14 +115,14 @@ public class AquariumClient {
                 .maxInboundMessageSize(4 * 1024 * 1024); // 4MB
 
         // Add basic auth if credentials are provided
-        if (config.getUsername() != null && config.getCredentialsPassword() != null) {
+        if (config.getCredentialsUsername() != null && config.getCredentialsPassword() != null) {
             channelBuilder.intercept(new BasicAuthInterceptor(config.getCredentialsUsername(), config.getCredentialsPassword()));
         }
 
         // Add certificate verification if provided
         if (config.getCertificateId() != null && !config.getCertificateId().trim().isEmpty()) {
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            X509Certificate cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(config.getCertificateId().getBytes()));
+            X509Certificate cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(config.getCertificate()));
             channelBuilder.sslContext(GrpcSslContexts.forClient()
                 .trustManager(cert)
                 .build());

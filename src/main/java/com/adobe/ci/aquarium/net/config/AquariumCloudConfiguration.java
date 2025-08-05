@@ -108,7 +108,7 @@ public class AquariumCloudConfiguration {
         return credentials != null ? credentials.getPassword().getPlainText() : null;
     }
 
-    public String getCertificate() {
+    public byte[] getCertificate() {
         if (StringUtils.isBlank(certificateId)) {
             return null;
         }
@@ -126,7 +126,7 @@ public class AquariumCloudConfiguration {
                 java.io.InputStream is = fileCredentials.getContent();
                 byte[] bytes = new byte[is.available()];
                 is.read(bytes);
-                return new String(bytes);
+                return bytes;
             } catch (IOException e) {
                 e.printStackTrace();
             }

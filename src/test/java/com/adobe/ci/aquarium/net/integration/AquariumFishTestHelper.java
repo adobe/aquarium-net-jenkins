@@ -254,7 +254,7 @@ public class AquariumFishTestHelper extends ExternalResource {
         String certificateId = createTestCertificate(jenkins, getCACertificatePEM());
         return new AquariumCloudConfiguration.Builder()
             .enabled(true)
-            .initAddress(apiEndpoint)
+            .initAddress("https://"+apiEndpoint)
             .credentialsId(credentialsId)
             .certificateId(certificateId)
             .agentConnectionWaitMinutes(1)
@@ -264,13 +264,15 @@ public class AquariumFishTestHelper extends ExternalResource {
     public String createTestCredentials(JenkinsRule jenkins, String username, String password) throws IOException {
         CredentialsStore store = lookupStore(jenkins.jenkins);
         store.addCredentials(Domain.global(), new UsernamePasswordCredentialsImpl(CredentialsScope.GLOBAL, "aquarium-credentials", null, username, password));
+        LOGGER.info("Created test credentials: " + "aquarium-credentials");
         return "aquarium-credentials";
     }
 
-    public String createTestCertificate(JenkinsRule jenkins, String certificate) throws IOException {
+    public String createTestCertificate(JenkinsRule jenkins, byte[] certificate) throws IOException {
         CredentialsStore store = lookupStore(jenkins.jenkins);
         store.addCredentials(Domain.global(),
-            new FileCredentialsImpl(CredentialsScope.GLOBAL, "aquarium-certificate", null, "certificate.crt", SecretBytes.fromString(certificate)));
+            new FileCredentialsImpl(CredentialsScope.GLOBAL, "aquarium-certificate", null, "certificate.crt", SecretBytes.fromBytes(certificate)));
+        LOGGER.info("Created test certificate: " + "aquarium-certificate");
         return "aquarium-certificate";
     }
 
@@ -285,10 +287,10 @@ public class AquariumFishTestHelper extends ExternalResource {
     /**
      * Get the CA certificate as PEM string
      */
-    public String getCACertificatePEM() {
+    public byte[] getCACertificatePEM() {
         try {
             Path caFile = workspace.resolve("fish_data").resolve("ca.crt");
-            return new String(Files.readAllBytes(caFile));
+            return Files.readAllBytes(caFile);
         } catch (IOException e) {
             throw new RuntimeException("Failed to read CA certificate", e);
         }

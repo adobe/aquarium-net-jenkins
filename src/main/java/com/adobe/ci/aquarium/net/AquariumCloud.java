@@ -81,8 +81,9 @@ public class AquariumCloud extends Cloud {
     // A collection of labels supported by the Aquarium Fish cluster
     private final Map<String, com.adobe.ci.aquarium.net.model.Label> fishLabelsCache = new ConcurrentHashMap<>();
     private Set<LabelAtom> labelsCached;
-    private AquariumClient client;
-    private volatile boolean connected = false;
+
+    private transient AquariumClient client;
+    private transient volatile boolean connected = false;
 
     @DataBoundConstructor
     public AquariumCloud(String name) {
@@ -92,7 +93,8 @@ public class AquariumCloud extends Cloud {
 
     /**
      * Constructor for integration tests
-     * @param name
+     * @param name - name of the cloud
+     * @param config - configuration for connection to the Aquarium Fish node
      */
     public AquariumCloud(String name, AquariumCloudConfiguration config) {
         super(name);
@@ -105,6 +107,7 @@ public class AquariumCloud extends Cloud {
         this.metadata = config.getAdditionalMetadata();
         this.labelFilter = config.getLabelFilter();
         LOG.info("STARTING Aquarium CLOUD");
+        initializeConnection();
     }
 
     /**

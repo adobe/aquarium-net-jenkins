@@ -107,12 +107,12 @@ public class AquariumFishIntegrationTest {
         // Verify our test label is available
         boolean foundTestLabel = false;
         for (String labelName : cloud.getFishLabelsCache().keySet()) {
-            if ("jenkins-test-label".equals(labelName)) {
+            if ("jenkins-test-label".equals(cloud.getFishLabelsCache().get(labelName).getName())) {
                 foundTestLabel = true;
                 break;
             }
         }
-        assertTrue("Test label should be available in cache", foundTestLabel);
+        assertTrue("Test label should be available in cache: " + cloud.getFishLabelsCache().keySet(), foundTestLabel);
     }
 
     @Test
