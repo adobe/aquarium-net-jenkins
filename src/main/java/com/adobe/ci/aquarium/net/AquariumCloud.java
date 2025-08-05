@@ -71,7 +71,7 @@ public class AquariumCloud extends Cloud {
     private String initAddressUrl;
     @CheckForNull
     private String credentialsId;
-    private String caCredentialsId;
+    private String certificateId;
     private Integer agentConnectWaitMin;
     private String jenkinsUrl;
     private String metadata;
@@ -98,6 +98,8 @@ public class AquariumCloud extends Cloud {
         super(name);
         this.enabled = config.isEnabled();
         this.initAddressUrl = config.getInitAddress();
+        this.credentialsId = config.getCredentialsId();
+        this.certificateId = config.getCertificateId();
         this.agentConnectWaitMin = config.getAgentConnectionWaitMinutes();
         this.jenkinsUrl = config.getJenkinsUrl();
         this.metadata = config.getAdditionalMetadata();
@@ -248,7 +250,7 @@ public class AquariumCloud extends Cloud {
     public String getCredentialsId() { return this.credentialsId; }
 
     // Used by jelly
-    public String getCaCredentialsId() { return this.caCredentialsId; }
+    public String getCertificateId() { return this.certificateId; }
 
     public int getAgentConnectWaitMin() {
         if( this.agentConnectWaitMin == null || this.agentConnectWaitMin < 0 ) {
@@ -295,9 +297,8 @@ public class AquariumCloud extends Cloud {
         AquariumCloudConfiguration config = new AquariumCloudConfiguration.Builder()
                 .enabled(this.enabled)
                 .initAddress(address)
-                .username(this.getCredentialsUsername())
-                .password(this.getCredentialsPassword())
-                .certificate(this.getCACertificate())
+                .credentialsId(this.getCredentialsId())
+                .certificateId(this.getCertificateId())
                 .agentConnectionWaitMinutes(this.agentConnectWaitMin)
                 .jenkinsUrl(this.jenkinsUrl)
                 .additionalMetadata(this.metadata)
@@ -310,64 +311,6 @@ public class AquariumCloud extends Cloud {
         return this.client;
     }
 
-    private String getCredentialsUsername() {
-        if (StringUtils.isBlank(credentialsId)) {
-            return null;
-        }
-        StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
-                CredentialsProvider.lookupCredentials(
-                        StandardUsernamePasswordCredentials.class,
-                        Jenkins.get(),
-                        ACL.SYSTEM,
-                        new ArrayList<>()
-                ),
-                CredentialsMatchers.withId(credentialsId)
-        );
-        return credentials != null ? credentials.getUsername() : null;
-    }
-
-    private String getCredentialsPassword() {
-        if (StringUtils.isBlank(credentialsId)) {
-            return null;
-        }
-        StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
-                CredentialsProvider.lookupCredentials(
-                        StandardUsernamePasswordCredentials.class,
-                        Jenkins.get(),
-                        ACL.SYSTEM,
-                        new ArrayList<>()
-                ),
-                CredentialsMatchers.withId(credentialsId)
-        );
-        return credentials != null ? credentials.getPassword().getPlainText() : null;
-    }
-
-    private String getCACertificate() {
-        if (StringUtils.isBlank(caCredentialsId)) {
-            return null;
-        }
-        FileCredentials fileCredentials = CredentialsMatchers.firstOrNull(
-                CredentialsProvider.lookupCredentials(
-                        FileCredentials.class,
-                        Jenkins.get(),
-                        ACL.SYSTEM,
-                        new ArrayList<>()
-                ),
-                CredentialsMatchers.withId(caCredentialsId)
-        );
-        if (fileCredentials != null) {
-            try {
-                java.io.InputStream is = fileCredentials.getContent();
-                byte[] bytes = new byte[is.available()];
-                is.read(bytes);
-                return new String(bytes);
-            } catch (IOException e) {
-                LOG.log(Level.WARNING, "Failed to read certificate file", e);
-            }
-        }
-        return null;
-    }
-
     @DataBoundSetter
     public void setInitAddressUrl(String value) {
         this.initAddressUrl = Util.fixEmptyAndTrim(value);
@@ -376,11 +319,6 @@ public class AquariumCloud extends Cloud {
     @DataBoundSetter
     public void setCredentialsId(String value) {
         this.credentialsId = Util.fixEmpty(value);
-    }
-
-    @DataBoundSetter
-    public void setCaCredentialsId(String value) {
-        this.caCredentialsId = Util.fixEmpty(value);
     }
 
     @DataBoundSetter
@@ -951,7 +889,7 @@ public class AquariumCloud extends Cloud {
         public FormValidation doTestConnection(@QueryParameter String name,
                                                @QueryParameter String initAddressUrl,
                                                @QueryParameter String credentialsId,
-                                               @QueryParameter String caCredentialsId) {
+                                               @QueryParameter String certificateId) {
             Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
             if (StringUtils.isBlank(name))
@@ -961,9 +899,8 @@ public class AquariumCloud extends Cloud {
                 URL address = new URL(initAddressUrl);
                 AquariumCloudConfiguration config = new AquariumCloudConfiguration.Builder()
                         .initAddress(address.getHost() + ":" + address.getPort())
-                        .username(getCredentialsUsernameForId(credentialsId))
-                        .password(getCredentialsPasswordForId(credentialsId))
-                        .certificate(getCACertificateForId(caCredentialsId))
+                        .credentialsId(credentialsId)
+                        .certificateId(certificateId)
                         .build();
                 AquariumClient client = new AquariumClient(config, false);
                 client.connect();
@@ -1025,7 +962,7 @@ public class AquariumCloud extends Cloud {
 
         @RequirePOST
         @SuppressWarnings("unused") // used by jelly
-        public ListBoxModel doFillCaCredentialsIdItems(@AncestorInPath ItemGroup context, @QueryParameter String serverUrl) {
+        public ListBoxModel doFillCertificateIdItems(@AncestorInPath ItemGroup context, @QueryParameter String serverUrl) {
             Jenkins.get().checkPermission(Jenkins.ADMINISTER);
             StandardListBoxModel result = new StandardListBoxModel();
             result.includeEmptyValue();
@@ -1039,64 +976,6 @@ public class AquariumCloud extends Cloud {
                     )
             );
             return result;
-        }
-
-        private static String getCredentialsUsernameForId(String credentialsId) {
-            if (StringUtils.isBlank(credentialsId)) {
-                return null;
-            }
-            StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
-                    CredentialsProvider.lookupCredentials(
-                            StandardUsernamePasswordCredentials.class,
-                            Jenkins.get(),
-                            ACL.SYSTEM,
-                            new ArrayList<>()
-                    ),
-                    CredentialsMatchers.withId(credentialsId)
-            );
-            return credentials != null ? credentials.getUsername() : null;
-        }
-
-        private static String getCredentialsPasswordForId(String credentialsId) {
-            if (StringUtils.isBlank(credentialsId)) {
-                return null;
-            }
-            StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
-                    CredentialsProvider.lookupCredentials(
-                            StandardUsernamePasswordCredentials.class,
-                            Jenkins.get(),
-                            ACL.SYSTEM,
-                            new ArrayList<>()
-                    ),
-                    CredentialsMatchers.withId(credentialsId)
-            );
-            return credentials != null ? credentials.getPassword().getPlainText() : null;
-        }
-
-        private static String getCACertificateForId(String caCredentialsId) {
-            if (StringUtils.isBlank(caCredentialsId)) {
-                return null;
-            }
-            FileCredentials fileCredentials = CredentialsMatchers.firstOrNull(
-                    CredentialsProvider.lookupCredentials(
-                            FileCredentials.class,
-                            Jenkins.get(),
-                            ACL.SYSTEM,
-                            new ArrayList<>()
-                    ),
-                    CredentialsMatchers.withId(caCredentialsId)
-            );
-            if (fileCredentials != null) {
-                try {
-                    java.io.InputStream is = fileCredentials.getContent();
-                    byte[] bytes = new byte[is.available()];
-                    is.read(bytes);
-                    return new String(bytes);
-                } catch (IOException e) {
-                    LOG.log(Level.WARNING, "Failed to read certificate file", e);
-                }
-            }
-            return null;
         }
     }
 }

@@ -18,7 +18,7 @@
         <c:select/>
     </f:entry>
 
-    <f:entry title="${%CA Certificate Credentials}" field="caCredentialsId">
+    <f:entry title="${%CA Certificate Credentials}" field="certificateId">
         <c:select/>
     </f:entry>
 
@@ -27,7 +27,7 @@
     </f:entry>
 
     <f:validateButton title="${%Test Connection}" progress="${%Testing...}"
-                      method="testConnection" with="name,initAddressUrl,credentialsId,caCredentialsId"/>
+                      method="testConnection" with="name,initAddressUrl,credentialsId,certificateId"/>
 
     <f:entry title="${%Jenkins URL}" field="jenkinsUrl">
         <f:textbox />

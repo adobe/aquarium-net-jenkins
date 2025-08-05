@@ -14,8 +14,17 @@
 
 package com.adobe.ci.aquarium.net.config;
 
-import hudson.util.Secret;
 import org.kohsuke.stapler.DataBoundConstructor;
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import com.cloudbees.plugins.credentials.CredentialsMatchers;
+import com.cloudbees.plugins.credentials.CredentialsProvider;
+import hudson.security.ACL;
+import jenkins.model.Jenkins;
+import org.apache.commons.lang.StringUtils;
+import org.jenkinsci.plugins.plaincredentials.FileCredentials;
+
+import java.util.ArrayList;
+import java.io.IOException;
 
 /**
  * Configuration class for Aquarium Fish Cloud plugin.
@@ -24,9 +33,8 @@ import org.kohsuke.stapler.DataBoundConstructor;
 public class AquariumCloudConfiguration {
     private final boolean enabled;
     private final String initAddress;
-    private final String username;
-    private final Secret password;
-    private final String certificate;
+    private final String credentialsId;
+    private final String certificateId;
     private final int agentConnectionWaitMinutes;
     private final String jenkinsUrl;
     private final String additionalMetadata;
@@ -35,18 +43,16 @@ public class AquariumCloudConfiguration {
     @DataBoundConstructor
     public AquariumCloudConfiguration(boolean enabled,
                                     String initAddress,
-                                    String username,
-                                    Secret password,
-                                    String certificate,
+                                    String credentialsId,
+                                    String certificateId,
                                     int agentConnectionWaitMinutes,
                                     String jenkinsUrl,
                                     String additionalMetadata,
                                     String labelFilter) {
         this.enabled = enabled;
         this.initAddress = initAddress;
-        this.username = username;
-        this.password = password;
-        this.certificate = certificate;
+        this.credentialsId = credentialsId;
+        this.certificateId = certificateId;
         this.agentConnectionWaitMinutes = agentConnectionWaitMinutes > 0 ? agentConnectionWaitMinutes : 10;
         this.jenkinsUrl = jenkinsUrl;
         this.additionalMetadata = additionalMetadata;
@@ -62,20 +68,70 @@ public class AquariumCloudConfiguration {
         return initAddress;
     }
 
-    public String getUsername() {
-        return username;
+    public String getCredentialsId() {
+        return credentialsId;
     }
 
-    public Secret getPassword() {
-        return password;
+    public String getCertificateId() {
+        return certificateId;
     }
 
-    public String getPasswordPlainText() {
-        return password != null ? password.getPlainText() : null;
+    public String getCredentialsUsername() {
+        if (StringUtils.isBlank(credentialsId)) {
+            return null;
+        }
+        StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
+                CredentialsProvider.lookupCredentials(
+                        StandardUsernamePasswordCredentials.class,
+                        Jenkins.get(),
+                        ACL.SYSTEM,
+                        new ArrayList<>()
+                ),
+                CredentialsMatchers.withId(credentialsId)
+        );
+        return credentials != null ? credentials.getUsername() : null;
+    }
+
+    public String getCredentialsPassword() {
+        if (StringUtils.isBlank(credentialsId)) {
+            return null;
+        }
+        StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
+                CredentialsProvider.lookupCredentials(
+                        StandardUsernamePasswordCredentials.class,
+                        Jenkins.get(),
+                        ACL.SYSTEM,
+                        new ArrayList<>()
+                ),
+                CredentialsMatchers.withId(credentialsId)
+        );
+        return credentials != null ? credentials.getPassword().getPlainText() : null;
     }
 
     public String getCertificate() {
-        return certificate;
+        if (StringUtils.isBlank(certificateId)) {
+            return null;
+        }
+        FileCredentials fileCredentials = CredentialsMatchers.firstOrNull(
+                CredentialsProvider.lookupCredentials(
+                        FileCredentials.class,
+                        Jenkins.get(),
+                        ACL.SYSTEM,
+                        new ArrayList<>()
+                ),
+                CredentialsMatchers.withId(certificateId)
+        );
+        if (fileCredentials != null) {
+            try {
+                java.io.InputStream is = fileCredentials.getContent();
+                byte[] bytes = new byte[is.available()];
+                is.read(bytes);
+                return new String(bytes);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
     }
 
     public int getAgentConnectionWaitMinutes() {
@@ -100,9 +156,8 @@ public class AquariumCloudConfiguration {
     public static class Builder {
         private boolean enabled = true;
         private String initAddress;
-        private String username;
-        private String password;
-        private String certificate;
+        private String credentialsId;
+        private String certificateId;
         private int agentConnectionWaitMinutes = 10;
         private String jenkinsUrl;
         private String additionalMetadata;
@@ -118,18 +173,13 @@ public class AquariumCloudConfiguration {
             return this;
         }
 
-        public Builder username(String username) {
-            this.username = username;
+        public Builder credentialsId(String credentialsId) {
+            this.credentialsId = credentialsId;
             return this;
         }
 
-        public Builder password(String password) {
-            this.password = password;
-            return this;
-        }
-
-        public Builder certificate(String certificate) {
-            this.certificate = certificate;
+        public Builder certificateId(String certificateId) {
+            this.certificateId = certificateId;
             return this;
         }
 
@@ -155,9 +205,8 @@ public class AquariumCloudConfiguration {
 
         public AquariumCloudConfiguration build() {
             return new AquariumCloudConfiguration(
-                enabled, initAddress, username,
-                password != null ? Secret.fromString(password) : null,
-                certificate, agentConnectionWaitMinutes, jenkinsUrl,
+                enabled, initAddress, credentialsId,
+                certificateId, agentConnectionWaitMinutes, jenkinsUrl,
                 additionalMetadata, labelFilter
             );
         }
@@ -168,7 +217,8 @@ public class AquariumCloudConfiguration {
         return "AquariumCloudConfiguration{" +
                 "enabled=" + enabled +
                 ", initAddress='" + initAddress + '\'' +
-                ", username='" + username + '\'' +
+                ", credentialsId='" + credentialsId + '\'' +
+                ", certificateId='" + certificateId + '\'' +
                 ", agentConnectionWaitMinutes=" + agentConnectionWaitMinutes +
                 ", jenkinsUrl='" + jenkinsUrl + '\'' +
                 ", labelFilter='" + labelFilter + '\'' +
