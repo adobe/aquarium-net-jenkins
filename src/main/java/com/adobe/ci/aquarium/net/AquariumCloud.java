@@ -79,7 +79,7 @@ public class AquariumCloud extends Cloud {
     private List<LabelMapping> labelMappings = new ArrayList<>();
 
     // A collection of labels supported by the Aquarium Fish cluster
-    private final Map<String, com.adobe.ci.aquarium.net.model.Label> fishLabelsCache = new ConcurrentHashMap<>();
+    private transient final Map<String, com.adobe.ci.aquarium.net.model.Label> fishLabelsCache = new ConcurrentHashMap<>();
     private Set<LabelAtom> labelsCached;
 
     private transient AquariumClient client;
@@ -156,7 +156,7 @@ public class AquariumCloud extends Cloud {
                 if (matchesLabelFilter(label.getName())) {
                     fishLabelsCache.put(label.getUid(), label);
                     updateJenkinsLabelsCache();
-                    LOG.log(Level.INFO, "Added Fish label: " + label.getName() + " v" + label.getVersion());
+                    LOG.log(Level.INFO, "Added Fish label: " + label.getName() + ":" + label.getVersion());
                 }
             }
 
@@ -165,7 +165,7 @@ public class AquariumCloud extends Cloud {
                 if (matchesLabelFilter(label.getName())) {
                     fishLabelsCache.put(label.getUid(), label);
                     updateJenkinsLabelsCache();
-                    LOG.log(Level.INFO, "Updated Fish label: " + label.getName() + " v" + label.getVersion());
+                    LOG.log(Level.INFO, "Updated Fish label: " + label.getName() + ":" + label.getVersion());
                 }
             }
 
@@ -513,29 +513,20 @@ public class AquariumCloud extends Cloud {
 
     /**
      * Planning agent to create with non-blocking application provisioning
-     * @param fishLabelName Fish label name
-     * @param fishLabelVersion Fish label version
+     * @param fishLabel Fish label name, that could contain version separated by ":"
      * @return PlannedNode which will be connected from the agent in the future
      */
-    private PlannedNode buildAgent(String fishLabelName, @Nullable Integer fishLabelVersion) {
+    private PlannedNode buildAgent(String fishLabel) {
         Future<Node> future;
         String displayName;
-        String labelVersion = fishLabelName;
-        if (fishLabelVersion != null) {
-            labelVersion += ":" + fishLabelVersion;
-        }
 
         try {
             // Create the Jenkins agent first
             AquariumSlave agent = AquariumSlave.builder().cloud(this)
-                    .addLabel(labelVersion)
-                    .addLabel(LabelMapping.getLabels(this.labelMappings, fishLabelName))
+                    .addLabel(fishLabel)
+                    .addLabel(LabelMapping.getLabels(this.labelMappings, fishLabel))
                     .build();
             displayName = agent.getDisplayName();
-
-            // Start application creation asynchronously
-            startApplicationCreation(agent, fishLabelName, fishLabelVersion);
-
             future = Futures.immediateFuture(agent);
         } catch (IOException | Descriptor.FormException e) {
             displayName = null;
@@ -547,18 +538,23 @@ public class AquariumCloud extends Cloud {
     /**
      * Start asynchronous application creation and monitoring
      */
-    private void startApplicationCreation(AquariumSlave agent, String fishLabelName, Integer fishLabelVersion) {
+    public void startApplicationCreation(AquariumSlave agent, String fishLabel) {
         // Find the Fish label UID
-        com.adobe.ci.aquarium.net.model.Label fishLabel = null;
+        com.adobe.ci.aquarium.net.model.Label fishLabelObj = null;
+        String fishLabelName = fishLabel.split(":")[0];
+        Integer fishLabelVersion = null;
+        if (fishLabel.contains(":")) {
+            fishLabelVersion = Integer.parseInt(fishLabel.split(":")[1]);
+        }
         for (com.adobe.ci.aquarium.net.model.Label label : fishLabelsCache.values()) {
             if (label.getName().equals(fishLabelName) &&
-                (fishLabelVersion == null || label.getVersion() == fishLabelVersion)) {
-                fishLabel = label;
+                (fishLabelVersion == null || label.getVersion() == fishLabelVersion)) { // TODO: check if version is correct
+                fishLabelObj = label;
                 break;
             }
         }
 
-        if (fishLabel == null) {
+        if (fishLabelObj == null) {
             LOG.log(Level.SEVERE, "Fish label not found in cache: " + fishLabelName + ":" + fishLabelVersion);
             try {
                 agent.terminate();
@@ -572,7 +568,7 @@ public class AquariumCloud extends Cloud {
             // Create application request
             aquarium.v2.ApplicationOuterClass.Application.Builder appBuilder =
                 aquarium.v2.ApplicationOuterClass.Application.newBuilder()
-                    .setLabelUid(fishLabel.getUid());
+                    .setLabelUid(fishLabelObj.getUid());
 
             // Add metadata
             Map<String, String> metadata = new HashMap<>();
@@ -605,6 +601,7 @@ public class AquariumCloud extends Cloud {
             // Convert metadata to protobuf Struct
             com.google.protobuf.Struct.Builder metadataBuilder = com.google.protobuf.Struct.newBuilder();
             for (Map.Entry<String, String> entry : metadata.entrySet()) {
+                LOG.fine("Adding metadata: " + entry.getKey() + "=" + entry.getValue());
                 metadataBuilder.putFields(entry.getKey(),
                     com.google.protobuf.Value.newBuilder().setStringValue(entry.getValue()).build());
             }
@@ -723,39 +720,21 @@ public class AquariumCloud extends Cloud {
         // Check if there is already enough provisioned nodes to cover the need of the queue
         Set<String> allInProvisioning = getInProvisioning(label); // Nodes being launched
         int actualExcessWorkload = Jenkins.get().getQueue().countBuildableItemsFor(label);
+        if (actualExcessWorkload == 0) {
+            LOG.fine("No queue excess workload, setting to: " + excessWorkload);
+            actualExcessWorkload = excessWorkload;
+        }
         int toBeProvisioned = Math.min(excessWorkload, actualExcessWorkload - allInProvisioning.size());
         if (toBeProvisioned <= 0) {
+            LOG.fine("No need to provision additional nodes, already provisioning: " + allInProvisioning);
             return plannedNodes; // No need to provision anything
         }
 
-        LOG.log(Level.INFO, "In provisioning : " + allInProvisioning + " and we need to add: " + toBeProvisioned + "(total required: " + actualExcessWorkload + ")");
-
-        // Find the Fish label that matches the Jenkins label
-        String fishLabelName = "";
-        Integer fishLabelVersion = null;
-        com.adobe.ci.aquarium.net.model.Label matchedFishLabel = findMatchingFishLabel(label);
-
-        if (matchedFishLabel == null) {
-            LOG.log(Level.WARNING, "No matching Fish label found for: " + label);
-            return plannedNodes;
-        }
-
-        fishLabelName = matchedFishLabel.getName();
-
-        // Check if a specific version was requested
-        if (label.toString().contains(":")) {
-            fishLabelVersion = extractVersionFromLabel(label, fishLabelName);
-        }
-
-        if (fishLabelVersion == null) {
-            fishLabelVersion = matchedFishLabel.getVersion(); // Use latest version
-        }
-
-        LOG.log(Level.INFO, "Chosen Fish label: " + fishLabelName + " version: " + fishLabelVersion);
+        LOG.log(Level.INFO, "In provisioning : " + allInProvisioning + " and we need to add: " + toBeProvisioned + " (total required: " + actualExcessWorkload + ")");
 
         // Create planned nodes - each will start application creation asynchronously
         while (toBeProvisioned > 0) {
-            plannedNodes.add(buildAgent(fishLabelName, fishLabelVersion));
+            plannedNodes.add(buildAgent(label.toString()));
             toBeProvisioned--;
         }
         return plannedNodes;
@@ -831,19 +810,16 @@ public class AquariumCloud extends Cloud {
     /**
      * Get JNLP secret for an agent
      */
-    private String getJnlpSecret(AquariumSlave agent) {
+    private String getJnlpSecret(AquariumSlave agent) throws Exception {
         // Jenkins generates JNLP secrets automatically for agents
         // We can access it through the agent's computer
-        try {
-            Computer computer = agent.toComputer();
-            if (computer != null && computer instanceof SlaveComputer) {
-                SlaveComputer slaveComputer = (SlaveComputer) computer;
-                return slaveComputer.getJnlpMac();
-            }
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Failed to get JNLP secret for agent " + agent.getNodeName(), e);
+        Computer computer = agent.toComputer();
+        LOG.finest("Getting JNLP secret for agent: " + agent.getNodeName() + ", computer: " + computer);
+        if (computer != null && computer instanceof SlaveComputer) {
+            SlaveComputer slaveComputer = (SlaveComputer) computer;
+            return slaveComputer.getJnlpMac();
         }
-        return ""; // Fallback to empty string
+        throw new Exception("Failed to get JNLP secret for agent: " + agent.getNodeName());
     }
 
     /**

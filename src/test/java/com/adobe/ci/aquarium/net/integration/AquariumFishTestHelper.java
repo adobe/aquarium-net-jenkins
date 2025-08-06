@@ -5,6 +5,7 @@ import com.adobe.ci.aquarium.net.AquariumClient;
 import com.adobe.ci.aquarium.net.config.AquariumCloudConfiguration;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
+import com.google.protobuf.ListValue;
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
@@ -208,9 +209,23 @@ public class AquariumFishTestHelper extends ExternalResource {
         // Create label definition with proper protobuf structure
         Struct options = Struct.newBuilder()
             .putFields("images", Value.newBuilder()
-                .setStringValue("jenkins/inbound-agent:latest")
+                .setListValue(ListValue.newBuilder()
+                    .addValues(Value.newBuilder()
+                        .setStructValue(Struct.newBuilder()
+                            .putFields("name", Value.newBuilder()
+                                .setStringValue("jenkins-agent-example")
+                                .build())
+                            .putFields("version", Value.newBuilder()
+                                .setStringValue("latest")
+                                .build())
+                            .putFields("url", Value.newBuilder()
+                                .setStringValue("http://predefined/image")
+                                .build())
+                            .build())
+                    .build())
                 .build())
-            .build();
+            .build())
+        .build();
 
         LabelOuterClass.Resources resources = LabelOuterClass.Resources.newBuilder()
             .setCpu(1)
@@ -255,6 +270,7 @@ public class AquariumFishTestHelper extends ExternalResource {
         return new AquariumCloudConfiguration.Builder()
             .enabled(true)
             .initAddress("https://"+apiEndpoint)
+            .jenkinsUrl(jenkins.getInstance().getRootUrl().replaceAll("/localhost", "/host.docker.internal"))
             .credentialsId(credentialsId)
             .certificateId(certificateId)
             .agentConnectionWaitMinutes(1)

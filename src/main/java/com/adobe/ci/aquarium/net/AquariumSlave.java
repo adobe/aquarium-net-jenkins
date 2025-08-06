@@ -35,7 +35,6 @@ import org.apache.commons.lang.Validate;
 import javax.annotation.Nonnull;
 
 import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -283,6 +282,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     public static final class DescriptorImpl extends SlaveDescriptor {
 
         @Override
+        @Nonnull
         public String getDisplayName() {
             return "Aquarium Agent";
         }

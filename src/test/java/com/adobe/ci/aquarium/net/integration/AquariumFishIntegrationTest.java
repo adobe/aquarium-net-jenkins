@@ -7,9 +7,13 @@ import hudson.model.Result;
 import hudson.model.labels.LabelAtom;
 import hudson.slaves.NodeProvisioner;
 import jenkins.model.Jenkins;
+import java.util.logging.Level;
+
+import org.apache.commons.digester.annotations.CreationRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.LoggerRule;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +28,9 @@ public class AquariumFishIntegrationTest {
 
     @Rule
     public JenkinsRule j = new JenkinsRule();
+
+    @Rule
+    public LoggerRule logger = new LoggerRule().record("com.adobe.ci.aquarium", Level.ALL);
 
     @Rule
     public AquariumFishTestHelper fishHelper = new AquariumFishTestHelper();

@@ -61,8 +61,11 @@ public class AquariumLauncher extends JNLPLauncher {
 
         LOG.log(Level.INFO, "Launch node " + comp.getName());
 
+        String nodeFirstLabel = node.getLabelString().split(" ")[0];
+
         try {
             AquariumCloud cloud = node.getAquariumCloud();
+            cloud.startApplicationCreation(node, nodeFirstLabel);
 
             listener.getLogger().println("Starting Aquarium agent launch process...");
 

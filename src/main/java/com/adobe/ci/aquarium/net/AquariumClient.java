@@ -495,7 +495,7 @@ public class AquariumClient {
                 .setApplicationUid(applicationUid.toString())
                 .build();
 
-        Streaming.StreamingServiceConnectResponse response = sendStreamRequest("ApplicationServiceGetTaskRequest",
+        Streaming.StreamingServiceConnectResponse response = sendStreamRequest("ApplicationServiceGetStateRequest",
             com.google.protobuf.Any.pack(request));
 
         ApplicationOuterClass.ApplicationServiceGetStateResponse stateResponse = response.getResponseData()
