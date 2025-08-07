@@ -24,7 +24,7 @@ import static org.junit.Assert.*;
  * Integration test for Aquarium Fish Jenkins plugin.
  * Tests the complete workflow from Fish node startup to Jenkins pipeline execution.
  */
-public class AquariumFishIntegrationTest {
+public class AquariumFishIntegrationIT {
 
     @Rule
     public LoggerRule logger = new LoggerRule().record("com.adobe.ci.aquarium", Level.ALL);
