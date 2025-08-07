@@ -27,13 +27,13 @@ import static org.junit.Assert.*;
 public class AquariumFishIntegrationTest {
 
     @Rule
-    public JenkinsRule j = new JenkinsRule();
-
-    @Rule
     public LoggerRule logger = new LoggerRule().record("com.adobe.ci.aquarium", Level.ALL);
 
     @Rule
     public AquariumFishTestHelper fishHelper = new AquariumFishTestHelper();
+
+    @Rule
+    public JenkinsRule j = new JenkinsRule();
 
     @Test
     public void testCompleteWorkflow() throws Exception {
@@ -54,7 +54,7 @@ public class AquariumFishIntegrationTest {
         jenkinsInstance.clouds.add(cloud);
 
         // Wait for cloud to connect
-        Thread.sleep(5000);
+        Thread.sleep(2000);
 
         // Verify cloud is connected
         assertTrue("Cloud should be connected", cloud.isConnected());
@@ -75,6 +75,7 @@ public class AquariumFishIntegrationTest {
         // Step 6: Verify job completed successfully
         assertNotNull("Build should exist", project.getLastBuild());
         assertEquals("Build should be successful", Result.SUCCESS, project.getLastBuild().getResult());
+        assertTrue("Build log should contain 'Running on Aquarium Fish node: fish-'", project.getLastBuild().getLog(10000).toString().contains("Running on Aquarium Fish node: fish-"));
 
         // Step 7: Wait for node cleanup (should happen automatically)
         Thread.sleep(10000);

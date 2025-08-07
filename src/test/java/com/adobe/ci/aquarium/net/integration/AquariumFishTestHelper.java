@@ -55,6 +55,7 @@ public class AquariumFishTestHelper extends ExternalResource {
     private UserServiceGrpc.UserServiceBlockingStub userStub;
     private LabelServiceGrpc.LabelServiceBlockingStub labelStub;
     private ApplicationServiceGrpc.ApplicationServiceBlockingStub applicationStub;
+    private NodeServiceGrpc.NodeServiceBlockingStub nodeStub;
 
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final ExecutorService logReader = Executors.newSingleThreadExecutor();
@@ -130,6 +131,15 @@ public class AquariumFishTestHelper extends ExternalResource {
     public void stopFishNode() {
         LOGGER.info("Stopping Aquarium Fish node...");
 
+        try {
+            // Sending maintenance request to gracefully stop the node
+            sendMaintenanceRequest(true, true);
+            LOGGER.info("Sent maintenance request, waiting for 5 seconds...");
+            Thread.sleep(5000); // Wait for 5 seconds to ensure the node is stopped
+        } catch (Exception e) {
+            LOGGER.warning("Failed to send maintenance request: " + e.getMessage());
+        }
+
         isRunning.set(false);
 
         if (channel != null && !channel.isShutdown()) {
@@ -162,6 +172,26 @@ public class AquariumFishTestHelper extends ExternalResource {
         }
 
         LOGGER.info("Fish node stopped");
+    }
+    /**
+     * Create a test user for Jenkins authentication
+     */
+    public void sendMaintenanceRequest(boolean maintenance, boolean shutdown) throws Exception {
+        LOGGER.info("Sending maintenance request...");
+
+        NodeOuterClass.NodeServiceSetMaintenanceRequest request = NodeOuterClass.NodeServiceSetMaintenanceRequest.newBuilder()
+            .setMaintenance(maintenance)
+            .setShutdown(shutdown)
+            .setShutdownDelay("2s")
+            .build();
+
+            NodeOuterClass.NodeServiceSetMaintenanceResponse response = nodeStub.setMaintenance(request);
+
+        if (!response.getStatus()) {
+            throw new RuntimeException("Failed to send maintenance request: " + response.getMessage());
+        }
+
+        LOGGER.info("Maintenance request sent successfully");
     }
 
     /**
@@ -454,6 +484,7 @@ public class AquariumFishTestHelper extends ExternalResource {
         userStub = UserServiceGrpc.newBlockingStub(channel);
         labelStub = LabelServiceGrpc.newBlockingStub(channel);
         applicationStub = ApplicationServiceGrpc.newBlockingStub(channel);
+        nodeStub = NodeServiceGrpc.newBlockingStub(channel);
     }
 
     /**
