@@ -104,7 +104,7 @@ public class AquariumFishTestHelper extends ExternalResource {
         isRunning.set(true);
 
         // Start log reader
-        startLogReader();
+        fishLogReader();
 
         // Wait for initialization
         if (!initLatch.await(60, TimeUnit.SECONDS)) {
@@ -215,6 +215,7 @@ public class AquariumFishTestHelper extends ExternalResource {
             .setName("jenkins-user")
             .setPassword("jenkins-password")
             .addRoles("User")
+            .addRoles("Power")
             .build();
 
         UserOuterClass.UserServiceCreateRequest request = UserOuterClass.UserServiceCreateRequest.newBuilder()
@@ -408,14 +409,14 @@ public class AquariumFishTestHelper extends ExternalResource {
         throw new RuntimeException("Could not find aquarium-fish binary. Set FISH_PATH environment variable or ensure binary is in PATH.");
     }
 
-    private void startLogReader() {
+    private void fishLogReader() {
         logReader.submit(() -> {
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(fishProcess.getInputStream()))) {
 
                 String line;
                 while (isRunning.get() && (line = reader.readLine()) != null) {
-                    LOGGER.info("FISH: " + line);
+                    LOGGER.finer("FISH: " + line);
 
                     // Parse admin token
                     if (line.contains("Admin user pass: ")) {

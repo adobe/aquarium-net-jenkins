@@ -487,7 +487,7 @@ public class AquariumCloud extends Cloud {
             if (label.toString().contains(":")) {
                 // Modify label to cut-out the versions for now
                 label = Label.parseExpression(label.getExpression().replaceAll(":[0-9]+", ""));
-                LOG.log(Level.FINEST, "Modified label: " + label);
+                LOG.finest("Modified label: " + label);
             }
 
             // Match of the label expression

@@ -9,7 +9,6 @@ import hudson.slaves.NodeProvisioner;
 import jenkins.model.Jenkins;
 import java.util.logging.Level;
 
-import org.apache.commons.digester.annotations.CreationRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;

@@ -47,20 +47,31 @@ public class AquariumChannelListener extends Channel.Listener {
             LOG.log(Level.FINE, "Channel is closed on computer: " + computer + " cause: " + cause);
             return;
         }
-        String app_uid = computer.getAppInfo().getString("ApplicationUID");
-        if( app_uid.isEmpty() ) {
+        if (computer.getAppInfo() == null) {
+            LOG.log(Level.WARNING, "AppInfo is null for computer: " + computer);
+            return;
+        }
+        String app_uid = computer.getAppInfo().optString("ApplicationUID", "");
+        if( app_uid == null || app_uid.isEmpty() ) {
             LOG.log(Level.SEVERE, "Unable to locate ApplicationUID for computer: " + computer);
             return;
         }
         ApplicationState state;
         try {
-            state = computer.getNode().getAquariumCloud().getClient().applicationStateGet(UUID.fromString(app_uid));
+            AquariumSlave node = computer.getNode();
+            if (node == null || node.getAquariumCloud() == null || node.getAquariumCloud().getClient() == null) {
+                LOG.log(Level.WARNING, "Missing node/cloud/client to request state for ApplicationUID " + app_uid + " on computer: " + computer);
+                return;
+            }
+            state = node.getAquariumCloud().getClient().applicationStateGet(UUID.fromString(app_uid));
         } catch (Exception e) {
             LOG.log(Level.SEVERE, "Unable to request ApplicationState for ApplicationUID " + app_uid + " reason: " + e);
             return;
         }
         LOG.log(Level.WARNING, "Channel is closed on Computer: " + computer + " with ApplicationUID: " + app_uid + ", State: " + state.getStatus() + ": " + state.getDescription() + ", Cause: " + cause);
-        computer.getListener().getLogger().println("AquariumChannelListener remote disconnected: ApplicationUID: " + app_uid + ", State: " + state.getStatus() + ": " + state.getDescription() + ", Cause: " + cause);
+        if (computer.getListener() != null) {
+            computer.getListener().getLogger().println("AquariumChannelListener remote disconnected: ApplicationUID: " + app_uid + ", State: " + state.getStatus() + ": " + state.getDescription() + ", Cause: " + cause);
+        }
 
         if( state.getStatus() != Status.ALLOCATED ) {
             // Aborting all the executors since the Application was deallocated

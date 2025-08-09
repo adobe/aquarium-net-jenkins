@@ -14,7 +14,6 @@
 
 package com.adobe.ci.aquarium.net;
 
-import com.google.common.base.Throwables;
 import hudson.model.TaskListener;
 import hudson.slaves.JNLPLauncher;
 import hudson.slaves.SlaveComputer;
@@ -48,7 +47,7 @@ public class AquariumLauncher extends JNLPLauncher {
     }
 
     @Override
-    public synchronized void launch(SlaveComputer computer, TaskListener listener) {
+    public void launch(SlaveComputer computer, TaskListener listener) {
         if (!(computer instanceof AquariumComputer)) {
             throw new IllegalArgumentException("This Launcher can be used only with AquariumComputer");
         }
@@ -101,8 +100,13 @@ public class AquariumLauncher extends JNLPLauncher {
                         break;
                     }
 
-                    // Sleep and increment counter
-                    Thread.sleep(5000);
+                    // Sleep without holding the computer monitor to avoid SWL_SLEEP_WITH_LOCK_HELD
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Interrupted while waiting for agent connection", ie);
+                    }
                     waitedSeconds += 5;
 
                     // Log progress every minute
@@ -156,7 +160,8 @@ public class AquariumLauncher extends JNLPLauncher {
             } catch (IOException | InterruptedException e) {
                 LOG.log(Level.WARNING, "Unable to remove Jenkins node", e);
             }
-            throw Throwables.propagate(ex);
+            //Throwables.throwIfUnchecked(ex);
+            throw new RuntimeException(ex);
         }
     }
 

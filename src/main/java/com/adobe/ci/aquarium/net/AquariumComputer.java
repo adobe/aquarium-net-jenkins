@@ -17,13 +17,12 @@ package com.adobe.ci.aquarium.net;
 import hudson.model.Computer;
 import hudson.model.Executor;
 import hudson.model.Queue;
-import hudson.model.queue.SubTask;
+import hudson.model.TaskListener;
 import hudson.security.ACL;
 import hudson.security.Permission;
 import hudson.slaves.AbstractCloudComputer;
 import net.sf.json.JSONObject;
 import org.acegisecurity.Authentication;
-import org.jenkinsci.plugins.workflow.support.steps.ExecutorStepExecution.PlaceholderTask;
 import javax.annotation.Nonnull;
 
 import java.io.PrintStream;
@@ -63,24 +62,16 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
         Queue.Executable exec = executor.getCurrentExecutable();
         LOG.log(Level.INFO, "Computer {0} accepted task {1}", new Object[] {this, exec});
 
-        // Tell the current workflow about the node we're executing on
-        // Not that great solution - will be better to use the node step listener somehow, but I did not found a way to do that
-        try {
-            SubTask parent = exec.getParent();
-            if( parent instanceof PlaceholderTask ) {
-                PlaceholderTask wf_run = (PlaceholderTask) parent;
-                PrintStream logger = wf_run.getNode().getExecution().getOwner().getListener().getLogger();
-                if( !this.appInfo.isEmpty() ) {
-                    logger.println("Aquarium Application: " + this.appInfo);
-                }
-                if( !this.definitionInfo.isEmpty() ) {
-                    logger.println("Aquarium Definition: " + this.definitionInfo);
-                }
-            } else {
-                LOG.log(Level.WARNING, "Incorrect definition or executor to notify: Aquarium LabelDefinition: " + this.definitionInfo);
+        // Best-effort: write info to the computer listener (visible in node/agent log)
+        TaskListener tl = getListener();
+        if (tl != null) {
+            PrintStream logger = tl.getLogger();
+            if (this.appInfo != null && !this.appInfo.isEmpty()) {
+                logger.println("Aquarium Application: " + this.appInfo);
             }
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Unable to notify task about node resource: Aquarium LabelDefinition: " + this.definitionInfo);
+            if (this.definitionInfo != null && !this.definitionInfo.isEmpty()) {
+                logger.println("Aquarium Definition: " + this.definitionInfo);
+            }
         }
     }
 

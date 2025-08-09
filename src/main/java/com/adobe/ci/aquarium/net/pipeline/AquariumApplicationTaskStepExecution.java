@@ -90,6 +90,12 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
                         }
                         Thread.sleep(10000);
                     }
+                } catch (InterruptedException ie) {
+                    String msg = "Interrupted while requesting ApplicationTask";
+                    logger().println(msg);
+                    LOGGER.log(Level.FINE, msg);
+                    Thread.currentThread().interrupt();
+                    return out;
                 } catch (Exception e) {
                     String msg = "ApplicationTask was not found on AquariumCluster " + cloud.getName();
                     logger().println(msg);
@@ -97,16 +103,9 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
                 }
             }
         } catch (Exception e) {
-            if( e instanceof InterruptedException ) {
-                // TODO: Not quite sure interrupt could happen here - better will be to prepare test and check
-                String msg = "Interrupted while requesting ApplicationTask";
-                logger().println(msg);
-                LOGGER.log(Level.FINE, msg);
-            } else {
-                String msg = "Failed to request ApplicationTask";
-                logger().println(msg);
-                LOGGER.log(Level.WARNING, msg, e);
-            }
+            String msg = "Failed to request ApplicationTask";
+            logger().println(msg);
+            LOGGER.log(Level.WARNING, msg, e);
         }
         return out;
     }

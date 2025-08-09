@@ -64,6 +64,29 @@
         <aquarium-fish-java.version>dev-SNAPSHOT</aquarium-fish-java.version>
     </properties>
 
+    <profiles>
+        <!-- Special profile to run integration tests, which requires aquarium-fish binary + docker image setup -->
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <version>3.5.3</version>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
     <dependencies>
         <dependency>
             <groupId>org.jenkins-ci.plugins</groupId>
@@ -98,11 +121,6 @@
             <artifactId>aquarium-fish-java</artifactId>
             <version>${aquarium-fish-java.version}</version>
         </dependency>
-        <!--dependency>
-            <groupId>org.apache.tomcat</groupId>
-            <artifactId>annotations-api</artifactId>
-            <version>6.0.53</version>
-        </dependency-->
         <!-- Required by dependency parent pom 4.40 -->
         <dependency>
             <groupId>javax.mail</groupId>
@@ -110,22 +128,21 @@
             <version>1.4.7</version>
         </dependency>
 
-        <!-- Integration test dependencies -->
+        <!-- Pipeline engine for tests -->
         <dependency>
-            <groupId>com.google.inject</groupId>
-            <artifactId>guice</artifactId>
-            <version>4.2.2</version>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-cps</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>31.1-jre</version>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-job</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.google.errorprone</groupId>
-            <artifactId>error_prone_annotations</artifactId>
-            <version>2.30.0</version>
+            <groupId>org.jenkinsci.plugins</groupId>
+            <artifactId>pipeline-model-definition</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -146,7 +163,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>findbugs-maven-plugin</artifactId>
-                <version>2.4.1</version>
+                <version>3.0.5</version>
                 <configuration>
                      <xmlOutput>true</xmlOutput>
                      <!-- Optional directory to put findbugs xdoc xml report -->
