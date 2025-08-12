@@ -84,6 +84,7 @@ public class AquariumCloud extends Cloud {
 
     private transient AquariumClient client;
     private transient volatile boolean connected = false;
+    private transient boolean reconnectClient = true;
 
     @DataBoundConstructor
     public AquariumCloud(String name) {
@@ -107,6 +108,8 @@ public class AquariumCloud extends Cloud {
         this.metadata = config.getAdditionalMetadata();
         this.labelFilter = config.getLabelFilter();
         LOG.info("STARTING Aquarium CLOUD");
+        // In integration tests, avoid background reconnection to keep test isolation
+        this.reconnectClient = false;
         initializeConnection();
     }
 
@@ -307,7 +310,7 @@ public class AquariumCloud extends Cloud {
                 .additionalMetadata(this.metadata)
                 .labelFilter(this.labelFilter)
                 .build();
-        return new AquariumClient(config, true);
+        return new AquariumClient(config, this.reconnectClient);
     }
 
     public AquariumClient getClient() {
@@ -435,7 +438,7 @@ public class AquariumCloud extends Cloud {
     private void disconnectFromFish() {
         if (client != null) {
             try {
-                client.disconnect();
+                client.shutdown();
                 LOG.log(Level.INFO, "Disconnected from Aquarium Fish node for cloud " + name);
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Error disconnecting from Fish node", e);

@@ -15,7 +15,6 @@ import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.LoggerRule;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
 
@@ -23,7 +22,7 @@ import static org.junit.Assert.*;
  * Integration test for Aquarium Fish Jenkins plugin.
  * Tests the complete workflow from Fish node startup to Jenkins pipeline execution.
  */
-public class AquariumFishIntegrationIT {
+public class AquariumFishBasicIT {
 
     @Rule
     public LoggerRule logger = new LoggerRule().record("com.adobe.ci.aquarium", Level.ALL);
@@ -36,6 +35,9 @@ public class AquariumFishIntegrationIT {
 
     @Test
     public void testCompleteWorkflow() throws Exception {
+        // Create a simple test user
+        fishHelper.createSimpleTestUser();
+
         // Step 1: Fish node is already started by the test helper
         assertTrue("Fish node should be running", fishHelper.isRunning());
         assertNotNull("API endpoint should be available", fishHelper.getApiEndpoint());
@@ -92,6 +94,9 @@ public class AquariumFishIntegrationIT {
 
     @Test
     public void testCloudConnection() throws Exception {
+        // Create a simple test user
+        fishHelper.createSimpleTestUser();
+
         // Test cloud connection and label discovery
         AquariumCloudConfiguration config = fishHelper.getPluginConfig(j);
         AquariumCloud cloud = new AquariumCloud("connection-test", config);
@@ -124,6 +129,9 @@ public class AquariumFishIntegrationIT {
 
     @Test
     public void testLabelProvisioning() throws Exception {
+        // Create a simple test user
+        fishHelper.createSimpleTestUser();
+
         // Test that the cloud can provision nodes for our label
         AquariumCloudConfiguration config = fishHelper.getPluginConfig(j);
         AquariumCloud cloud = new AquariumCloud("provisioning-test", config);

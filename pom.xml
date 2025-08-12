@@ -115,10 +115,11 @@
             <version>${workflow-durable-task-step-version}</version>
         </dependency>
 
-        <!-- Aquarium-Fish Proto Library -->
+        <!-- Aquarium-Fish Proto Library, using shaded version to run on older jenkins pipeline plugins with guava < 31 -->
         <dependency>
             <groupId>com.adobe.ci.aquarium</groupId>
             <artifactId>aquarium-fish-java</artifactId>
+            <classifier>shaded</classifier>
             <version>${aquarium-fish-java.version}</version>
         </dependency>
         <!-- Required by dependency parent pom 4.40 -->

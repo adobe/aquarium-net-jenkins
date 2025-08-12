@@ -74,8 +74,7 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
                         ApplicationTask task = cloud.getClient().taskGet(task_uid);
                         // Convert protobuf to JSONObject for output
                         if( !task.getResult().toString().isEmpty() || !wait) {
-                            out = JSONObject.fromObject(task);
-                            /* In case JSONObject.fromObject will not work, we can use the following code
+                            // Yes, in theory we need to use protobuf utils to convert to JSON, but too much hassle with deps
                             out.put("uid", task.getUid());
                             out.put("application_uid", task.getApplicationUid());
                             out.put("created_at", task.getCreatedAt().getSeconds());
@@ -83,7 +82,7 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
                             out.put("task", task.getTask());
                             out.put("when", task.getWhen().toString());
                             out.put("options", task.getOptions().toString());
-                            out.put("result", task.getResult().toString());*/
+                            out.put("result", task.getResult().toString());
 
                             // No need to wait or we have the result - so returning the task
                             return out;

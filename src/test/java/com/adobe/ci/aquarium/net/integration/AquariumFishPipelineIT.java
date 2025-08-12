@@ -28,6 +28,9 @@ public class AquariumFishPipelineIT {
     @Test
     public void testPipelineStepImage() throws Exception {
         assertTrue("Fish must be running", fishHelper.isRunning());
+        // Create an advanced test user
+        fishHelper.createAdvancedTestUser();
+
         String labelUid = fishHelper.createTestLabel();
         assertNotNull(labelUid);
 
@@ -97,6 +100,9 @@ public class AquariumFishPipelineIT {
     @Test
     public void testPipelineStepSnapshot() throws Exception {
         assertTrue("Fish must be running", fishHelper.isRunning());
+        // Create an advanced test user
+        fishHelper.createAdvancedTestUser();
+
         String labelUid = fishHelper.createTestLabel();
         assertNotNull(labelUid);
 

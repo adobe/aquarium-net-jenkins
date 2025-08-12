@@ -67,8 +67,16 @@ public class AquariumClient {
 
     // Reconnection handling
     private volatile boolean reconnect = false;
-    private final ScheduledExecutorService reconnectionScheduler = Executors.newScheduledThreadPool(1);
+    private final ScheduledExecutorService reconnectionScheduler = Executors.newScheduledThreadPool(1, r -> {
+        Thread t = new Thread(r, "AquariumClient-Reconnect");
+        t.setDaemon(true);
+        return t;
+    });
     private volatile boolean reconnectionScheduled = false;
+    private volatile ScheduledFuture<?> reconnectionFuture = null;
+
+    // Shutdown flag to avoid scheduling reconnection during intentional disconnect
+    private volatile boolean shuttingDown = false;
 
     // Listeners
     private final List<ApplicationStateListener> stateListeners = new ArrayList<>();
@@ -101,6 +109,9 @@ public class AquariumClient {
         if (connected) {
             return;
         }
+
+        // Reset shutdown flag for a fresh connection lifecycle
+        shuttingDown = false;
 
         String[] hostParts = config.getInitAddress().split(":");
         String host = hostParts[0];
@@ -200,7 +211,9 @@ public class AquariumClient {
                 }
                 connected = false;
                 notifyConnectionStatusChanged(false);
-                scheduleReconnection();
+                if (!shuttingDown && reconnect) {
+                    scheduleReconnection();
+                }
             }
 
             @Override
@@ -212,7 +225,9 @@ public class AquariumClient {
                 }
                 connected = false;
                 notifyConnectionStatusChanged(false);
-                scheduleReconnection();
+                if (!shuttingDown && reconnect) {
+                    scheduleReconnection();
+                }
             }
         });
 
@@ -240,7 +255,9 @@ public class AquariumClient {
                 }
                 connected = false;
                 notifyConnectionStatusChanged(false);
-                scheduleReconnection();
+                if (!shuttingDown && reconnect) {
+                    scheduleReconnection();
+                }
             }
 
             @Override
@@ -252,7 +269,9 @@ public class AquariumClient {
                 }
                 connected = false;
                 notifyConnectionStatusChanged(false);
-                scheduleReconnection();
+                if (!shuttingDown && reconnect) {
+                    scheduleReconnection();
+                }
             }
         };
 
@@ -285,7 +304,7 @@ public class AquariumClient {
 
         if (!reconnectionScheduled) {
             reconnectionScheduled = true;
-            reconnectionScheduler.schedule(() -> {
+            reconnectionFuture = reconnectionScheduler.schedule(() -> {
                 try {
                     LOGGER.info("Attempting to reconnect to Aquarium Fish...");
                     reconnect();
@@ -678,6 +697,19 @@ public class AquariumClient {
      */
     public void disconnect() {
         try {
+            // Intentional shutdown begins
+            shuttingDown = true;
+
+            // Cancel any scheduled reconnection attempt
+            try {
+                if (reconnectionFuture != null) {
+                    reconnectionFuture.cancel(true);
+                    reconnectionFuture = null;
+                }
+            } catch (Exception ignore) {
+            }
+            reconnectionScheduled = false;
+
             connected = false;
             connectStreamEstablished = false;
             subscribeStreamEstablished = false;
@@ -713,8 +745,17 @@ public class AquariumClient {
      * Shutdown the client and cleanup resources
      */
     public void shutdown() {
-        if (reconnectionScheduler != null && !reconnectionScheduler.isShutdown()) {
-            reconnectionScheduler.shutdown();
+        shuttingDown = true;
+        try {
+            if (reconnectionFuture != null) {
+                reconnectionFuture.cancel(true);
+                reconnectionFuture = null;
+            }
+        } catch (Exception ignore) {
+        }
+        reconnectionScheduled = false;
+        if (!reconnectionScheduler.isShutdown()) {
+            reconnectionScheduler.shutdownNow();
         }
         disconnect();
     }

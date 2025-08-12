@@ -61,7 +61,7 @@ public class AquariumCreateImageStepExecution extends SynchronousNonBlockingStep
         Status when = Status.valueOf(step.getWhen());
 
         try {
-            LOGGER.log(Level.FINE, "Starting Aquarium Create Image step.");
+            LOGGER.fine("Starting Aquarium Create Image step.");
 
             Node node = getContext().get(Node.class);
             if( !(node instanceof AquariumSlave) ) {
@@ -70,6 +70,7 @@ public class AquariumCreateImageStepExecution extends SynchronousNonBlockingStep
             }
 
             UUID app_id = ((AquariumSlave)node).getApplicationUID();
+            LOGGER.fine("Application UID: " + app_id);
             AquariumCloud cloud = ((AquariumSlave)node).getAquariumCloud();
 
             String taskUidString = cloud.getClient().applicationTaskImage(app_id, when, full);

@@ -53,6 +53,7 @@ public class AquariumFishTestHelper extends ExternalResource {
     private X509Certificate caCertificate;
     private ManagedChannel channel;
     private UserServiceGrpc.UserServiceBlockingStub userStub;
+    private RoleServiceGrpc.RoleServiceBlockingStub roleStub;
     private LabelServiceGrpc.LabelServiceBlockingStub labelStub;
     private ApplicationServiceGrpc.ApplicationServiceBlockingStub applicationStub;
     private NodeServiceGrpc.NodeServiceBlockingStub nodeStub;
@@ -65,7 +66,6 @@ public class AquariumFishTestHelper extends ExternalResource {
     @Override
     protected void before() throws Throwable {
         startFishNode();
-        createTestUser();
     }
 
     @Override
@@ -195,27 +195,16 @@ public class AquariumFishTestHelper extends ExternalResource {
     }
 
     /**
-     * Create a test user for Jenkins authentication
+     * Create a simple test user with User role for Jenkins authentication
      */
-    public void createTestUser() throws Exception {
-        LOGGER.info("Creating test user...");
-
-        // First authenticate as admin
-        UserOuterClass.UserServiceGetMeRequest meRequest = UserOuterClass.UserServiceGetMeRequest.newBuilder().build();
-        UserOuterClass.UserServiceGetMeResponse meResponse = userStub.getMe(meRequest);
-
-        if (!meResponse.getStatus()) {
-            throw new RuntimeException("Failed to authenticate as admin: " + meResponse.getMessage());
-        }
-
-        LOGGER.info("Authenticated as admin user: " + meResponse.getData().getName());
+    public void createSimpleTestUser() throws Exception {
+        LOGGER.info("Creating simple test user...");
 
         // Create test user
         UserOuterClass.User user = UserOuterClass.User.newBuilder()
             .setName("jenkins-user")
             .setPassword("jenkins-password")
             .addRoles("User")
-            .addRoles("Power")
             .build();
 
         UserOuterClass.UserServiceCreateRequest request = UserOuterClass.UserServiceCreateRequest.newBuilder()
@@ -228,7 +217,110 @@ public class AquariumFishTestHelper extends ExternalResource {
             throw new RuntimeException("Failed to create test user: " + response.getMessage());
         }
 
-        LOGGER.info("Test user created successfully");
+        LOGGER.info("Simple test user created successfully");
+    }
+
+    /**
+     * Create an advanced test user with custom role for special Jenkins authentication
+     */
+    public void createAdvancedTestUser() throws Exception {
+        LOGGER.info("Creating advanced test user...");
+
+        // Create custom role for jenkins to cover advanced usecases
+        RoleOuterClass.Role role = RoleOuterClass.Role.newBuilder()
+            .setName("Jenkins")
+            // User - ApplicationService
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("Create").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("Deallocate").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("Get").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("GetResource").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("GetState").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("List").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("ListResource").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("ListState").build()
+            )
+            // User - LabelService
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("LabelService").setAction("List").build()
+            )
+            // User - StreamingService
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("StreamingService").setAction("Connect").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("StreamingService").setAction("Subscribe").build()
+            )
+            // Power - ApplicationService - is needed to create tasks (create snasphots/images)
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("CreateTask").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("GetTask").build()
+            )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("ApplicationService").setAction("ListTask").build()
+            )
+            .build();
+
+        RoleOuterClass.RoleServiceCreateRequest request1 = RoleOuterClass.RoleServiceCreateRequest.newBuilder()
+            .setRole(role)
+            .build();
+
+        RoleOuterClass.RoleServiceCreateResponse response1 = roleStub.create(request1);
+
+        if (!response1.getStatus()) {
+            throw new RuntimeException("Failed to create Jenkins role: " + response1.getData());
+        }
+
+        LOGGER.info("Jenkins role created successfully");
+
+        // Create test user
+        UserOuterClass.User user = UserOuterClass.User.newBuilder()
+            .setName("jenkins-user")
+            .setPassword("jenkins-password")
+            .addRoles("Jenkins")
+            .build();
+
+        UserOuterClass.UserServiceCreateRequest request2 = UserOuterClass.UserServiceCreateRequest.newBuilder()
+            .setUser(user)
+            .build();
+
+        UserOuterClass.UserServiceCreateResponse response2 = userStub.create(request2);
+
+        if (!response2.getStatus()) {
+            throw new RuntimeException("Failed to create test user: " + response2.getMessage());
+        }
+
+        LOGGER.info("Advanced test user created successfully");
     }
 
     /**
@@ -483,6 +575,7 @@ public class AquariumFishTestHelper extends ExternalResource {
             .build();
 
         userStub = UserServiceGrpc.newBlockingStub(channel);
+        roleStub = RoleServiceGrpc.newBlockingStub(channel);
         labelStub = LabelServiceGrpc.newBlockingStub(channel);
         applicationStub = ApplicationServiceGrpc.newBlockingStub(channel);
         nodeStub = NodeServiceGrpc.newBlockingStub(channel);
