@@ -15,6 +15,7 @@
 package com.adobe.ci.aquarium.net.model;
 
 import aquarium.v2.LabelOuterClass;
+import com.adobe.ci.aquarium.net.util.ProtobufJsonUtil;
 import com.google.protobuf.Timestamp;
 
 import java.time.Instant;
@@ -74,48 +75,8 @@ public class Label {
      * Get a human-readable description of this label in YAML format
      */
     public String getYamlDescription() {
-        StringBuilder yaml = new StringBuilder();
-        yaml.append("name: ").append(getName()).append("\n");
-        yaml.append("version: ").append(getVersion()).append("\n");
-        yaml.append("uid: ").append(getUid()).append("\n");
-        yaml.append("created_at: ").append(getCreatedAt()).append("\n");
-        yaml.append("definitions:\n");
-
-        for (int i = 0; i < getDefinitions().size(); i++) {
-            LabelOuterClass.LabelDefinition def = getDefinitions().get(i);
-            yaml.append("  - driver: ").append(def.getDriver()).append("\n");
-            yaml.append("    resources:\n");
-            yaml.append("      cpu: ").append(def.getResources().getCpu()).append("\n");
-            yaml.append("      ram: ").append(def.getResources().getRam()).append("\n");
-            if (!def.getResources().getNetwork().isEmpty()) {
-                yaml.append("      network: ").append(def.getResources().getNetwork()).append("\n");
-            }
-            if (def.getResources().getDisksCount() > 0) {
-                yaml.append("      disks:\n");
-                def.getResources().getDisksMap().forEach((key, disk) -> {
-                    yaml.append("        ").append(key).append(":\n");
-                    yaml.append("          size: ").append(disk.getSize()).append("\n");
-                    if (disk.getReuse()) {
-                        yaml.append("          reuse: true\n");
-                    }
-                });
-            }
-            if (def.getOptions().getFieldsCount() > 0) {
-                yaml.append("    options:\n");
-                def.getOptions().getFieldsMap().forEach((key, value) -> {
-                    yaml.append("      ").append(key).append(": ").append(value).append("\n");
-                });
-            }
-        }
-
-        if (getMetadata().size() > 0) {
-            yaml.append("metadata:\n");
-            getMetadata().forEach((key, value) -> {
-                yaml.append("  ").append(key).append(": ").append(value).append("\n");
-            });
-        }
-
-        return yaml.toString();
+        String yamlString = ProtobufJsonUtil.toYaml(this.getProtoLabel());
+        return yamlString;
     }
 
     @Override

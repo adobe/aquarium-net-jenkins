@@ -37,6 +37,9 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
     private JSONObject appInfo;
     private JSONObject definitionInfo;
 
+    // Set to true when this computer is being intentionally terminated by the plugin
+    private volatile boolean intentionalDisconnect;
+
     public AquariumComputer(AquariumSlave slave) {
         super(slave);
     }
@@ -54,6 +57,20 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
 
     public void setDefinitionInfo(JSONObject info) {
         this.definitionInfo = info;
+    }
+
+    /**
+     * Mark that this computer is about to disconnect intentionally
+     */
+    public void markIntentionalDisconnect() {
+        this.intentionalDisconnect = true;
+    }
+
+    /**
+     * Returns true if this computer was intentionally disconnected by the plugin
+     */
+    public boolean wasIntentionalDisconnect() {
+        return this.intentionalDisconnect;
     }
 
     @Override
@@ -88,6 +105,8 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
     private void done() {
         // Terminate the node
         try {
+            // Signal intentional disconnect before triggering termination so listeners can skip abort
+            this.markIntentionalDisconnect();
             AquariumSlave node = getNode();
             if( node == null ) {
                 LOG.log(Level.WARNING, "Unable to terminate null node: " + getNode());

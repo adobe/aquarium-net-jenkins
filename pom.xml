@@ -129,6 +129,13 @@
             <version>1.4.7</version>
         </dependency>
 
+        <!-- Yaml formatting library -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.4</version>
+        </dependency>
+
         <!-- Pipeline engine for tests -->
         <dependency>
             <groupId>org.jenkins-ci.plugins.workflow</groupId>

@@ -1,7 +1,6 @@
 package com.adobe.ci.aquarium.net.integration;
 
 import aquarium.v2.*;
-import com.adobe.ci.aquarium.net.AquariumClient;
 import com.adobe.ci.aquarium.net.config.AquariumCloudConfiguration;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
@@ -16,9 +15,7 @@ import hudson.model.ModelObject;
 import com.cloudbees.plugins.credentials.CredentialsScope;
 import com.cloudbees.plugins.credentials.CredentialsStore;
 import com.cloudbees.plugins.credentials.SecretBytes;
-import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
-import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl;
 import com.cloudbees.plugins.credentials.domains.Domain;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
@@ -26,14 +23,12 @@ import com.cloudbees.plugins.credentials.CredentialsProvider;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
-import java.util.logging.Level;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Iterator;
@@ -64,11 +59,6 @@ public class AquariumFishTestHelper extends ExternalResource {
     private final AtomicReference<String> initError = new AtomicReference<>();
 
     @Override
-    protected void before() throws Throwable {
-        startFishNode();
-    }
-
-    @Override
     protected void after() {
         stopFishNode();
     }
@@ -76,7 +66,7 @@ public class AquariumFishTestHelper extends ExternalResource {
     /**
      * Start the Aquarium Fish node with test configuration
      */
-    public void startFishNode() throws Exception {
+    public void startFishNode(String config) throws Exception {
         LOGGER.info("Starting Aquarium Fish node...");
 
         // Create workspace
@@ -84,7 +74,9 @@ public class AquariumFishTestHelper extends ExternalResource {
         LOGGER.info("Created workspace: " + workspace);
 
         // Create configuration file
-        String config = createTestConfig();
+        if (config == null) {
+            config = createTestConfig();
+        }
         Path configFile = workspace.resolve("config.yml");
         Files.write(configFile, config.getBytes());
         LOGGER.info("Created config file: " + configFile);

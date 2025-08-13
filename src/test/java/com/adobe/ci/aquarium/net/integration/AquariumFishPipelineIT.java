@@ -27,6 +27,8 @@ public class AquariumFishPipelineIT {
 
     @Test
     public void testPipelineStepImage() throws Exception {
+        fishHelper.startFishNode(null);
+
         assertTrue("Fish must be running", fishHelper.isRunning());
         // Create an advanced test user
         fishHelper.createAdvancedTestUser();
@@ -79,6 +81,8 @@ public class AquariumFishPipelineIT {
                 "        script {\n" +
                 "          def t1dataWait = aquariumApplicationTask(taskUid: env.IMG_TASK_UID, wait: true)\n" +
                 "          echo " + '"' + "Image task data (waited): ${t1dataWait}" + '"' + "\n" +
+                "          echo " + '"' + "Image task options 'full' value: ${t1dataWait.options.full}" + '"' + "\n" +
+                "          echo " + '"' + "Image task result image name: ${t1dataWait.result.image_name}" + '"' + "\n" +
                 "        }\n" +
                 "      }\n" +
                 "    }\n" +
@@ -91,14 +95,19 @@ public class AquariumFishPipelineIT {
         assertEquals(Result.SUCCESS, build.getResult());
 
         String log = JenkinsRule.getLog(build);
-        assertTrue(log.contains("Running on Aquarium Fish node: fish-"));
+        assertTrue("Log must contain 'Running on fish-'", log.contains("Running on fish-"));
+        System.out.println("Log: " + log);
         assertTrue("App info must be echoed", log.contains("App info:"));
         assertTrue("Image task UID must be echoed", log.contains("Image task UID:"));
         assertTrue("ApplicationTask data must be echoed", log.contains("Image task data:"));
+        assertTrue("Image task options 'full' value must be echoed", log.contains("Image task options 'full' value: false"));
+        assertTrue("Image task result image name must be echoed", log.contains("Image task result image name: fish-"));
     }
 
     @Test
     public void testPipelineStepSnapshot() throws Exception {
+        fishHelper.startFishNode(null);
+
         assertTrue("Fish must be running", fishHelper.isRunning());
         // Create an advanced test user
         fishHelper.createAdvancedTestUser();
@@ -148,6 +157,8 @@ public class AquariumFishPipelineIT {
                 "        script {\n" +
                 "          def t1dataWait = aquariumApplicationTask(taskUid: env.SNP_TASK_UID, wait: true)\n" +
                 "          echo " + '"' + "Snapshot task data (waited): ${t1dataWait}" + '"' + "\n" +
+                "          echo " + '"' + "Snapshot task options 'full' value: ${t1dataWait.options.full}" + '"' + "\n" +
+                "          echo " + '"' + "Snapshot task result snapshot name: ${t1dataWait.result.snapshot_names}" + '"' + "\n" +
                 "        }\n" +
                 "      }\n" +
                 "    }\n" +
@@ -160,10 +171,13 @@ public class AquariumFishPipelineIT {
         assertEquals(Result.SUCCESS, build.getResult());
 
         String log = JenkinsRule.getLog(build);
-        assertTrue(log.contains("Running on Aquarium Fish node: fish-"));
+        System.out.println("Log: " + log);
+        assertTrue("Log must contain 'Running on fish-'", log.contains("Running on fish-"));
         assertTrue("App info must be echoed", log.contains("App info:"));
         assertTrue("Snapshot task UID must be echoed", log.contains("Snapshot task UID:"));
-        assertTrue("ApplicationTask data must be echoed", log.contains("Snapshot task data:"));
+        assertTrue("ApplicationTask data must be echoed after waiting", log.contains("Snapshot task data (waited):"));
+        assertTrue("Snapshot task options 'full' value must be echoed", log.contains("Snapshot task options 'full' value: false"));
+        assertTrue("Snapshot task result snapshot name must be echoed", log.contains("Snapshot task result snapshot name: [fish-"));
     }
 }
 

@@ -17,7 +17,6 @@ package com.adobe.ci.aquarium.net;
 import com.adobe.ci.aquarium.net.config.AquariumCloudConfiguration;
 
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
-import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
@@ -37,7 +36,6 @@ import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.plaincredentials.FileCredentials;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import aquarium.v2.ApplicationOuterClass;
 import aquarium.v2.UserOuterClass;
 
 import org.kohsuke.stapler.AncestorInPath;
@@ -79,7 +77,7 @@ public class AquariumCloud extends Cloud {
     private List<LabelMapping> labelMappings = new ArrayList<>();
 
     // A collection of labels supported by the Aquarium Fish cluster
-    private transient final Map<String, com.adobe.ci.aquarium.net.model.Label> fishLabelsCache = new ConcurrentHashMap<>();
+    private transient Map<String, com.adobe.ci.aquarium.net.model.Label> fishLabelsCache = new ConcurrentHashMap<>();
     private Set<LabelAtom> labelsCached;
 
     private transient AquariumClient client;
@@ -122,11 +120,11 @@ public class AquariumCloud extends Cloud {
             return;
         }
 
-        if (client != null) {
-            return; // Already initialized
-        }
-
         try {
+            if (client != null) {
+                client.connect();
+                return;
+            }
             client = newClient();
             setupLabelListeners();
             client.connect();
@@ -217,6 +215,9 @@ public class AquariumCloud extends Cloud {
     private void refreshLabels() {
         try {
             List<com.adobe.ci.aquarium.net.model.Label> labels = client.listLabels();
+            if (fishLabelsCache == null) {
+                this.fishLabelsCache = new ConcurrentHashMap<>();
+            }
             fishLabelsCache.clear();
             for (com.adobe.ci.aquarium.net.model.Label label : labels) {
                 if (matchesLabelFilter(label.getName())) {
@@ -256,6 +257,7 @@ public class AquariumCloud extends Cloud {
     public String getCredentialsId() { return this.credentialsId; }
 
     // Used by jelly
+    @Nullable
     public String getCertificateId() { return this.certificateId; }
 
     public int getAgentConnectWaitMin() {
@@ -325,6 +327,11 @@ public class AquariumCloud extends Cloud {
     @DataBoundSetter
     public void setCredentialsId(String value) {
         this.credentialsId = Util.fixEmpty(value);
+    }
+
+    @DataBoundSetter
+    public void setCertificateId(String value) {
+        this.certificateId = Util.fixEmpty(value);
     }
 
     @DataBoundSetter

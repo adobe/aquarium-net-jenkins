@@ -14,8 +14,6 @@
 
 package com.adobe.ci.aquarium.net;
 
-import com.adobe.ci.aquarium.net.model.ApplicationState;
-import aquarium.v2.ApplicationOuterClass;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -147,6 +145,10 @@ public class AquariumSlave extends AbstractCloudSlave {
             LOG.log(Level.SEVERE, msg);
             listener.fatalError(msg);
             return;
+        }
+        // Mark the computer as intentionally disconnecting so channel listeners do not abort pipelines
+        if (computer instanceof AquariumComputer) {
+            ((AquariumComputer) computer).markIntentionalDisconnect();
         }
         if( !(computer.getOfflineCause() instanceof AquariumOfflineCause) ) {
             computer.disconnect(new AquariumOfflineCause());

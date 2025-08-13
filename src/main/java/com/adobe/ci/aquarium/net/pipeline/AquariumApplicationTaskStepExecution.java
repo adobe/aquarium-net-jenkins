@@ -16,6 +16,7 @@ package com.adobe.ci.aquarium.net.pipeline;
 
 import aquarium.v2.ApplicationOuterClass.ApplicationTask;
 import com.adobe.ci.aquarium.net.AquariumCloud;
+import com.adobe.ci.aquarium.net.util.ProtobufJsonUtil;
 import hudson.model.TaskListener;
 import hudson.util.LogTaskListener;
 import jenkins.model.Jenkins;
@@ -75,16 +76,7 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
                         // Convert protobuf to JSONObject for output
                         if( !task.getResult().toString().isEmpty() || !wait) {
                             // Yes, in theory we need to use protobuf utils to convert to JSON, but too much hassle with deps
-                            out.put("uid", task.getUid());
-                            out.put("application_uid", task.getApplicationUid());
-                            out.put("created_at", task.getCreatedAt().getSeconds());
-                            out.put("updated_at", task.getUpdatedAt().getSeconds());
-                            out.put("task", task.getTask());
-                            out.put("when", task.getWhen().toString());
-                            out.put("options", task.getOptions().toString());
-                            out.put("result", task.getResult().toString());
-
-                            // No need to wait or we have the result - so returning the task
+                            out = ProtobufJsonUtil.toJson(task);
                             return out;
                         }
                         Thread.sleep(10000);
@@ -114,4 +106,6 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
         LOGGER.log(Level.FINE, "Stopping Aquarium ApplicationTask step.");
         super.stop(cause);
     }
+
+
 }

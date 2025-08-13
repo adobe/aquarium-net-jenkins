@@ -17,13 +17,9 @@ import hudson.Extension;
 import hudson.model.Action;
 import jenkins.model.TransientActionFactory;
 import org.kohsuke.accmod.Restricted;
-import net.sf.json.JSONArray;
-import net.sf.json.JSONObject;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
-import jenkins.model.Jenkins;
 
 import javax.annotation.Nonnull;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**

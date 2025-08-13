@@ -35,6 +35,8 @@ public class AquariumFishBasicIT {
 
     @Test
     public void testCompleteWorkflow() throws Exception {
+        fishHelper.startFishNode(null);
+
         // Create a simple test user
         fishHelper.createSimpleTestUser();
 
@@ -94,6 +96,8 @@ public class AquariumFishBasicIT {
 
     @Test
     public void testCloudConnection() throws Exception {
+        fishHelper.startFishNode(null);
+
         // Create a simple test user
         fishHelper.createSimpleTestUser();
 
@@ -129,6 +133,8 @@ public class AquariumFishBasicIT {
 
     @Test
     public void testLabelProvisioning() throws Exception {
+        fishHelper.startFishNode(null);
+
         // Create a simple test user
         fishHelper.createSimpleTestUser();
 
