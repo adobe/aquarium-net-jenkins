@@ -3,7 +3,6 @@ package com.adobe.ci.aquarium.net.integration;
 import com.adobe.ci.aquarium.net.AquariumCloud;
 import com.adobe.ci.aquarium.net.config.AquariumCloudConfiguration;
 import hudson.model.Result;
-import jenkins.model.CauseOfInterruption;
 import jenkins.model.Jenkins;
 import org.junit.Rule;
 import org.junit.Test;
@@ -14,8 +13,6 @@ import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import java.util.List;
 import hudson.model.Cause;
-import hudson.model.CauseAction;
-import jenkins.model.InterruptedBuildAction;
 
 import static org.junit.Assert.*;
 

@@ -2,7 +2,6 @@ package com.adobe.ci.aquarium.net.integration;
 
 import com.adobe.ci.aquarium.net.AquariumCloud;
 import com.adobe.ci.aquarium.net.config.AquariumCloudConfiguration;
-import hudson.model.Result;
 import jenkins.model.Jenkins;
 import org.junit.Rule;
 import org.junit.Test;
@@ -92,11 +91,11 @@ public class AquariumFishPipelineIT {
         job.setDefinition(new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(jenkinsfile, true));
 
         WorkflowRun build = j.buildAndAssertSuccess(job);
-        assertEquals(Result.SUCCESS, build.getResult());
 
         String log = JenkinsRule.getLog(build);
-        assertTrue("Log must contain 'Running on fish-'", log.contains("Running on fish-"));
         System.out.println("Log: " + log);
+
+        assertTrue("Log must contain 'Running on fish-'", log.contains("Running on fish-"));
         assertTrue("App info must be echoed", log.contains("App info:"));
         assertTrue("Image task UID must be echoed", log.contains("Image task UID:"));
         assertTrue("ApplicationTask data must be echoed", log.contains("Image task data:"));
@@ -168,10 +167,10 @@ public class AquariumFishPipelineIT {
         job.setDefinition(new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(jenkinsfile, true));
 
         WorkflowRun build = j.buildAndAssertSuccess(job);
-        assertEquals(Result.SUCCESS, build.getResult());
 
         String log = JenkinsRule.getLog(build);
         System.out.println("Log: " + log);
+
         assertTrue("Log must contain 'Running on fish-'", log.contains("Running on fish-"));
         assertTrue("App info must be echoed", log.contains("App info:"));
         assertTrue("Snapshot task UID must be echoed", log.contains("Snapshot task UID:"));
