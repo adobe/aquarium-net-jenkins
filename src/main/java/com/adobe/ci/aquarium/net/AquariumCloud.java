@@ -307,10 +307,10 @@ public class AquariumCloud extends Cloud {
                 .initAddress(address)
                 .credentialsId(this.getCredentialsId())
                 .certificateId(this.getCertificateId())
-                .agentConnectionWaitMinutes(this.agentConnectWaitMin)
-                .jenkinsUrl(this.jenkinsUrl)
-                .additionalMetadata(this.metadata)
-                .labelFilter(this.labelFilter)
+                .agentConnectionWaitMinutes(this.getAgentConnectWaitMin())
+                .jenkinsUrl(this.getJenkinsUrl())
+                .additionalMetadata(this.getMetadata())
+                .labelFilter(this.getLabelFilter())
                 .build();
         return new AquariumClient(config, this.reconnectClient);
     }
