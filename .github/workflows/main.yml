@@ -96,6 +96,9 @@ jobs:
           curl -sLo aquarium-fish.tar.xz https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-v${{ steps.extract_version.outputs.java_version }}.linux_amd64.tar.xz
           tar xf aquarium-fish.tar.xz
 
+      - name: Checking docker system settings
+        run: docker system info --format "{{ .NCPU }},{{ .MemTotal }}"
+
       - name: Build docker image with jenkins agent
         run: docker build -t jenkins-agent-docker:java11 -f src/test/resources/jenkins-agent-docker/Dockerfile.java11 src/test/resources/jenkins-agent-docker
 
