@@ -22,12 +22,12 @@ jobs:
 
       - name: Find required version of the aquarium-fish client artifact
         id: extract_version
-        run: echo "java_version=$(mvn help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)" >> $GITHUB_OUTPUT
+        run: echo "java_version=$(mvn --batch-mode help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)" >> $GITHUB_OUTPUT
 
       - name: Download and install release artifact from github
         run: |
-          curl -Lo aquarium-fish-java-shaded.jar https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-java-${{ steps.extract_version.outputs.java_version }}-shaded.jar
-          mvn install:install-file -Dfile=aquarium-fish-java-shaded.jar -DgroupId=com.adobe.ci.aquarium -DartifactId=aquarium-fish-java -Dversion=${{ steps.extract_version.outputs.java_version }} -Dclassifier=shaded -Dpackaging=jar
+          curl -sLo aquarium-fish-java-shaded.jar https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-java-${{ steps.extract_version.outputs.java_version }}-shaded.jar
+          mvn --batch-mode install:install-file -Dfile=aquarium-fish-java-shaded.jar -DgroupId=com.adobe.ci.aquarium -DartifactId=aquarium-fish-java -Dversion=${{ steps.extract_version.outputs.java_version }} -Dclassifier=shaded -Dpackaging=jar
 
       - name: CodeQL Autobuild
         uses: github/codeql-action/autobuild@v3
@@ -50,12 +50,12 @@ jobs:
 
       - name: Find required version of the aquarium-fish client artifact
         id: extract_version
-        run: echo "java_version=$(mvn help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)" >> $GITHUB_OUTPUT
+        run: echo "java_version=$(mvn --batch-mode help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)" >> $GITHUB_OUTPUT
 
       - name: Download and install release artifact from github
         run: |
-          curl -Lo aquarium-fish-java-shaded.jar https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-java-${{ steps.extract_version.outputs.java_version }}-shaded.jar
-          mvn install:install-file -Dfile=aquarium-fish-java-shaded.jar -DgroupId=com.adobe.ci.aquarium -DartifactId=aquarium-fish-java -Dversion=${{ steps.extract_version.outputs.java_version }} -Dclassifier=shaded -Dpackaging=jar
+          curl -sLo aquarium-fish-java-shaded.jar https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-java-${{ steps.extract_version.outputs.java_version }}-shaded.jar
+          mvn --batch-mode install:install-file -Dfile=aquarium-fish-java-shaded.jar -DgroupId=com.adobe.ci.aquarium -DartifactId=aquarium-fish-java -Dversion=${{ steps.extract_version.outputs.java_version }} -Dclassifier=shaded -Dpackaging=jar
 
       - name: Set version from the closest git tag
         run: mvn --batch-mode versions:set -DnewVersion="$(git describe --always --tags --match 'v*' | sed 's/^v//')$([ "$(git diff)" = '' ] || echo '-dirty')"
@@ -84,18 +84,20 @@ jobs:
 
       - name: Find required version of the aquarium-fish client artifact
         id: extract_version
-        run: echo "java_version=$(mvn help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)" >> $GITHUB_OUTPUT
+        run: echo "java_version=$(mvn --batch-mode help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)" >> $GITHUB_OUTPUT
 
       - name: Download and install release artifact from github
-        run:
-          curl -Lo aquarium-fish-java-shaded.jar https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-java-${{ steps.extract_version.outputs.java_version }}-shaded.jar
-          mvn install:install-file -Dfile=aquarium-fish-java-shaded.jar -DgroupId=com.adobe.ci.aquarium -DartifactId=aquarium-fish-java -Dversion=${{ steps.extract_version.outputs.java_version }} -Dclassifier=shaded -Dpackaging=jar
+        run: |
+          curl -sLo aquarium-fish-java-shaded.jar https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-java-${{ steps.extract_version.outputs.java_version }}-shaded.jar
+          mvn --batch-mode install:install-file -Dfile=aquarium-fish-java-shaded.jar -DgroupId=com.adobe.ci.aquarium -DartifactId=aquarium-fish-java -Dversion=${{ steps.extract_version.outputs.java_version }} -Dclassifier=shaded -Dpackaging=jar
 
-      # TODO: Setup docker image for tests
       - name: Download dependencies for integration tests
         run: |
-          curl -Lo aquarium-fish.tar.xz https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-v${{ steps.extract_version.outputs.java_version }}.linux_amd64.tar.xz
+          curl -sLo aquarium-fish.tar.xz https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-v${{ steps.extract_version.outputs.java_version }}.linux_amd64.tar.xz
           tar xf aquarium-fish.tar.xz
+
+      - name: Build docker image with jenkins agent
+        run: docker build -t jenkins-agent-docker:java11 -f src/test/resources/jenkins-agent-docker/Dockerfile.java11 src/test/resources/jenkins-agent-docker
 
       - name: Verify with Maven
         run: mvn --batch-mode --update-snapshots verify -P integration-tests

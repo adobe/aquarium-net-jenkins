@@ -1,0 +1,21 @@
+# WARNING: Change JAVA_HOME accordingly on version change
+FROM openjdk:11-slim
+
+ENV LANG en_US.UTF-8
+ENV LC_ALL en_US.UTF-8
+ENV LANGUAGE en_US:en
+
+# Install curl dependency for the jenkins_agent.sh
+RUN apt update && \
+    apt install -y curl procps && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY jenkins_agent.sh /srv/jenkins_agent/jenkins_agent.sh
+
+# Jenkins agent variables
+ENV JAVA_HOME /usr/local/openjdk-11
+
+WORKDIR /root
+STOPSIGNAL SIGINT
+ENTRYPOINT ["/srv/jenkins_agent/jenkins_agent.sh"]
