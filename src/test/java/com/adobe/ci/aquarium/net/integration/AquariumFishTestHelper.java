@@ -500,9 +500,11 @@ public class AquariumFishTestHelper extends ExternalResource {
 
                 String line;
                 while (isRunning.get() && (line = reader.readLine()) != null) {
+                    LOGGER.finer("FISH: " + line);
                     if (line.contains("rpc.req_type=ApplicationServiceDeallocateRequest")) {
                         ProcessBuilder processBuilder = new ProcessBuilder();
                         processBuilder.command("sh", "-c", "for i in $(docker ps -q); do docker logs $i; done");
+                        processBuilder.redirectErrorStream(true);
                         Process process = processBuilder.start();
 
                         BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -511,7 +513,6 @@ public class AquariumFishTestHelper extends ExternalResource {
                             LOGGER.fine("DOCKER: " + l);
                         }
                     }
-                    LOGGER.finer("FISH: " + line);
 
                     // Parse admin token
                     if (line.contains("Admin user pass: ")) {

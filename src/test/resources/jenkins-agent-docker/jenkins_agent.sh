@@ -111,7 +111,7 @@ until cd "${ws_path}"; do
 done
 
 # Download the agent jar
-until [ "x$(curl -sSLo agent.jar -w '%{http_code}' ${curl_insecure} "${JENKINS_URL}/jnlpJars/agent.jar")" = 'x200' ]; do
+until [ "x$(curl -vSLo agent.jar -w '%{http_code}' ${curl_insecure} "${JENKINS_URL}/jnlpJars/agent.jar")" = 'x200' ]; do
     echo "Wait for '${JENKINS_URL}' jenkins response..."
     sleep 5
 done
