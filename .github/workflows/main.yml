@@ -104,6 +104,7 @@ jobs:
 
       - name: Verify with Maven
         run: |
+          ip a
           # For some reason github doesn't want to work with --add-host option, so workaround:
           echo '172.17.0.1 host.docker.internal' | sudo tee -a /etc/hosts
           mvn --batch-mode --update-snapshots verify -P integration-tests
