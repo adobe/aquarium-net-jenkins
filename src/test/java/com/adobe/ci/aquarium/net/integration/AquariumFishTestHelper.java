@@ -1,3 +1,17 @@
+/**
+ * Copyright 2025 Adobe. All rights reserved.
+ * This file is licensed to you under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License. You may obtain a copy
+ * of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTATIONS
+ * OF ANY KIND, either express or implied. See the License for the specific language
+ * governing permissions and limitations under the License.
+ */
+
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net.integration;
 
 import aquarium.v2.*;
@@ -21,6 +35,7 @@ import com.cloudbees.plugins.credentials.domains.Domain;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 
 import java.io.*;
+import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.cert.CertificateFactory;
@@ -58,8 +73,14 @@ public class AquariumFishTestHelper extends ExternalResource {
     private final CountDownLatch initLatch = new CountDownLatch(1);
     private final AtomicReference<String> initError = new AtomicReference<>();
 
+    // TCP Proxy fields
+    private TCPProxy tcpProxy;
+    private URL proxyUrl;
+    private ExecutorService proxyExecutor;
+
     @Override
     protected void after() {
+        stopTcpProxy();
         stopFishNode();
     }
 
@@ -379,17 +400,95 @@ public class AquariumFishTestHelper extends ExternalResource {
      * Get configuration for Jenkins plugin
      */
     public AquariumCloudConfiguration getPluginConfig(JenkinsRule jenkins) throws IOException {
+        String rootUrl = jenkins.getInstance().getRootUrl();
+        if (rootUrl == null) {
+            throw new IOException("Jenkins root URL is null");
+        }
+
+        // Start TCP proxy to allow Docker containers to connect to JenkinsRule which is listening on localhost
+        URL url = new URL(rootUrl);
+        URL newurl = startTcpProxy(url);
+
         // Create jenkins credentials
         String credentialsId = createTestCredentials(jenkins, "jenkins-user", "jenkins-password");
         String certificateId = createTestCertificate(jenkins, getCACertificatePEM());
+
         return new AquariumCloudConfiguration.Builder()
             .enabled(true)
             .initAddress("https://"+apiEndpoint)
-            .jenkinsUrl(jenkins.getInstance().getRootUrl().replaceAll("/localhost", "/host.docker.internal"))
+            .jenkinsUrl(newurl.toExternalForm())
             .credentialsId(credentialsId)
             .certificateId(certificateId)
             .agentConnectionWaitMinutes(1)
             .build();
+    }
+
+    /**
+     * Start TCP proxy to forward traffic from 0.0.0.0 to localhost Jenkins
+     */
+    private URL startTcpProxy(URL url) throws IOException {
+        if (tcpProxy != null) {
+            return proxyUrl; // Already started
+        }
+
+        // Extract port from Jenkins root URL
+        int port = url.getPort();
+        if (port == -1) {
+            port = url.getDefaultPort(); // 80 for http, 443 for https
+        }
+
+        try {
+            int targetPort = port+20;
+            LOGGER.info("Starting TCP proxy from 0.0.0.0:" + targetPort + " to localhost:" + port);
+
+            // Create and start TCP proxy
+            tcpProxy = new TCPProxy(port, targetPort);
+            proxyExecutor = Executors.newCachedThreadPool();
+
+            proxyExecutor.submit(() -> {
+                try {
+                    tcpProxy.start();
+                } catch (IOException e) {
+                    LOGGER.severe("Failed to start TCP proxy: " + e.getMessage());
+                    throw new RuntimeException("Failed to start TCP proxy", e);
+                }
+            });
+
+            // Give the proxy a moment to start
+            Thread.sleep(1000);
+
+            proxyUrl = new URL(url.getProtocol(), "host.docker.internal", targetPort, url.getFile());
+            return proxyUrl;
+        } catch (Exception e) {
+            throw new IOException("Failed to start TCP proxy", e);
+        }
+    }
+
+    /**
+     * Stop TCP proxy
+     */
+    private void stopTcpProxy() {
+        LOGGER.info("Stopping TCP proxy...");
+
+        if (tcpProxy != null) {
+            tcpProxy.stop();
+            tcpProxy = null;
+        }
+
+        if (proxyExecutor != null) {
+            proxyExecutor.shutdown();
+            try {
+                if (!proxyExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    proxyExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                proxyExecutor.shutdownNow();
+            }
+            proxyExecutor = null;
+        }
+
+        LOGGER.info("TCP proxy stopped");
     }
 
     public String createTestCredentials(JenkinsRule jenkins, String username, String password) throws IOException {
@@ -651,5 +750,135 @@ public class AquariumFishTestHelper extends ExternalResource {
             }
         }
         dir.delete();
+    }
+
+    /**
+     * Simple TCP proxy to forward traffic from 0.0.0.0 to JenkinsRule on localhost
+     * This allows Docker containers to connect to Jenkins running on localhost
+     */
+    private static class TCPProxy {
+        private final int localPort;
+        private final int targetPort;
+        private final AtomicBoolean running = new AtomicBoolean(false);
+        private ServerSocket serverSocket;
+        private final ExecutorService connectionHandlers = Executors.newCachedThreadPool();
+
+        public TCPProxy(int localPort, int targetPort) {
+            this.localPort = localPort;
+            this.targetPort = targetPort;
+        }
+
+        public void start() throws IOException {
+            if (running.get()) {
+                return;
+            }
+
+            serverSocket = new ServerSocket();
+            serverSocket.setReuseAddress(true);
+            serverSocket.bind(new InetSocketAddress("0.0.0.0", targetPort));
+            running.set(true);
+
+            LOGGER.info("TCP Proxy started on 0.0.0.0:" + targetPort + " -> localhost:" + localPort);
+
+            // Accept connections in a separate thread
+            connectionHandlers.submit(() -> {
+                while (running.get() && !serverSocket.isClosed()) {
+                    try {
+                        Socket clientSocket = serverSocket.accept();
+                        connectionHandlers.submit(new ConnectionHandler(clientSocket, localPort));
+                    } catch (IOException e) {
+                        if (running.get()) {
+                            LOGGER.warning("Error accepting connection: " + e.getMessage());
+                        }
+                    }
+                }
+            });
+        }
+
+        public void stop() {
+            running.set(false);
+
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    LOGGER.warning("Error closing server socket: " + e.getMessage());
+                }
+            }
+
+            connectionHandlers.shutdown();
+            try {
+                if (!connectionHandlers.awaitTermination(5, TimeUnit.SECONDS)) {
+                    connectionHandlers.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                connectionHandlers.shutdownNow();
+            }
+
+            LOGGER.info("TCP Proxy stopped");
+        }
+
+        private static class ConnectionHandler implements Runnable {
+            private final Socket clientSocket;
+            private final int targetPort;
+
+            public ConnectionHandler(Socket clientSocket, int targetPort) {
+                this.clientSocket = clientSocket;
+                this.targetPort = targetPort;
+            }
+
+            @Override
+            public void run() {
+                try (Socket targetSocket = new Socket("localhost", targetPort)) {
+                    LOGGER.fine("Proxying connection from " + clientSocket.getRemoteSocketAddress() +
+                               " to localhost:" + targetPort);
+
+                    // Create bidirectional data forwarding threads
+                    Thread clientToTarget = new Thread(() -> {
+                        try {
+                            forwardData(clientSocket.getInputStream(), targetSocket.getOutputStream());
+                        } catch (IOException e) {
+                            LOGGER.fine("Client to target forwarding ended: " + e.getMessage());
+                        }
+                    });
+
+                    Thread targetToClient = new Thread(() -> {
+                        try {
+                            forwardData(targetSocket.getInputStream(), clientSocket.getOutputStream());
+                        } catch (IOException e) {
+                            LOGGER.fine("Target to client forwarding ended: " + e.getMessage());
+                        }
+                    });
+
+                    clientToTarget.start();
+                    targetToClient.start();
+
+                    // Wait for either thread to finish (connection closed)
+                    clientToTarget.join();
+                    targetToClient.join();
+
+                } catch (IOException e) {
+                    LOGGER.fine("Error connecting to target: " + e.getMessage());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    try {
+                        clientSocket.close();
+                    } catch (IOException e) {
+                        LOGGER.fine("Error closing client socket: " + e.getMessage());
+                    }
+                }
+            }
+
+            private void forwardData(InputStream input, OutputStream output) throws IOException {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, bytesRead);
+                    output.flush();
+                }
+            }
+        }
     }
 }

@@ -96,18 +96,19 @@ jobs:
           curl -sLo aquarium-fish.tar.xz https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-v${{ steps.extract_version.outputs.java_version }}.linux_amd64.tar.xz
           tar xf aquarium-fish.tar.xz
 
-      - name: Checking docker system settings
-        run: docker system info --format "{{ .NCPU }},{{ .MemTotal }}"
+      - name: Configuring system for tests execution
+        run: |
+          docker system info
+          # Github docker doesn't know about host.docker.internal, so helping it here
+          echo '172.17.0.1 host.docker.internal' | sudo tee -a /etc/hosts
 
       - name: Build docker image with jenkins agent
         run: docker build -t jenkins-agent-docker:java11 -f src/test/resources/jenkins-agent-docker/Dockerfile.java11 src/test/resources/jenkins-agent-docker
 
       - name: Verify with Maven
         run: |
-          ip a
-          # For some reason github doesn't want to work with --add-host option, so workaround:
-          echo '172.17.0.1 host.docker.internal' | sudo tee -a /etc/hosts
-          mvn --batch-mode --update-snapshots verify -P integration-tests
+          # JenkinsRule v.1736 wants to http listen only on localhost, which is not great. Using proxy to pass the ports
+          mvn --batch-mode --update-snapshots clean verify -P integration-tests
 
 # IntegrationTests-FreshJenkins:
 #   runs-on: ubuntu-latest

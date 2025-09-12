@@ -36,4 +36,4 @@ if [ "x$(docker images -q jenkins-agent-docker:java11)" = x ]; then
 fi
 
 echo 'Verify with Maven'
-mvn --batch-mode --update-snapshots verify -P integration-tests
+mvn --batch-mode --update-snapshots clean verify -P integration-tests
