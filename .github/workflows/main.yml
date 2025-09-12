@@ -103,7 +103,10 @@ jobs:
         run: docker build -t jenkins-agent-docker:java11 -f src/test/resources/jenkins-agent-docker/Dockerfile.java11 src/test/resources/jenkins-agent-docker
 
       - name: Verify with Maven
-        run: mvn --batch-mode --update-snapshots verify -P integration-tests
+        run: |
+          # For some reason github doesn't want to work with --add-host option, so workaround:
+          echo '172.17.0.1 host.docker.internal' | sudo tee -a /etc/hosts
+          mvn --batch-mode --update-snapshots verify -P integration-tests
 
 # IntegrationTests-FreshJenkins:
 #   runs-on: ubuntu-latest

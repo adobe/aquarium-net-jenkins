@@ -385,7 +385,7 @@ public class AquariumFishTestHelper extends ExternalResource {
         return new AquariumCloudConfiguration.Builder()
             .enabled(true)
             .initAddress("https://"+apiEndpoint)
-            .jenkinsUrl(jenkins.getInstance().getRootUrl().replaceAll("/localhost", "/host-gateway"))
+            .jenkinsUrl(jenkins.getInstance().getRootUrl().replaceAll("/localhost", "/host.docker.internal"))
             .credentialsId(credentialsId)
             .certificateId(certificateId)
             .agentConnectionWaitMinutes(1)
