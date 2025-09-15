@@ -157,7 +157,7 @@ public class AquariumCloud extends Cloud {
                 if (matchesLabelFilter(label.getName())) {
                     fishLabelsCache.put(label.getUid(), label);
                     updateJenkinsLabelsCache();
-                    LOG.log(Level.INFO, "Added Fish label: " + label.getName() + ":" + label.getVersion());
+                    LOG.log(Level.INFO, "Added Fish label: " + label.getName() + ":" + label.getVersion() + " (" + label.getUid() + ")");
                 }
             }
 
@@ -166,7 +166,7 @@ public class AquariumCloud extends Cloud {
                 if (matchesLabelFilter(label.getName())) {
                     fishLabelsCache.put(label.getUid(), label);
                     updateJenkinsLabelsCache();
-                    LOG.log(Level.INFO, "Updated Fish label: " + label.getName() + ":" + label.getVersion());
+                    LOG.log(Level.INFO, "Updated Fish label: " + label.getName() + ":" + label.getVersion() + " (" + label.getUid() + ")");
                 }
             }
 
@@ -175,7 +175,7 @@ public class AquariumCloud extends Cloud {
                 com.adobe.ci.aquarium.net.model.Label removed = fishLabelsCache.remove(labelUid);
                 if (removed != null) {
                     updateJenkinsLabelsCache();
-                    LOG.log(Level.INFO, "Removed Fish label: " + removed.getName());
+                    LOG.log(Level.INFO, "Removed Fish label: " + removed.getName() + ":" + label.getVersion() + " (" + label.getUid() + ")");
                 }
             }
         });
@@ -556,11 +556,21 @@ public class AquariumCloud extends Cloud {
         if (fishLabel.contains(":")) {
             fishLabelVersion = Integer.parseInt(fishLabel.split(":")[1]);
         }
+        // Picking the right label version from the list
         for (com.adobe.ci.aquarium.net.model.Label label : fishLabelsCache.values()) {
-            if (label.getName().equals(fishLabelName) &&
-                (fishLabelVersion == null || label.getVersion() == fishLabelVersion)) { // TODO: check if version is correct
-                fishLabelObj = label;
-                break;
+            if (label.getName().equals(fishLabelName) {
+                if (fishLabelVersion == null) {
+                    // Looking for the latest label version
+                    if (fishLabelObj == null || label.getVersion() > fishLabelObj.getVersion()) {
+                        fishLabelObj = label;
+                    }
+                } else {
+                    // Looking for the exact version
+                    if (label.getVersion() == fishLabelVersion) {
+                        fishLabelObj = label;
+                        break;
+                    }
+                }
             }
         }
 
