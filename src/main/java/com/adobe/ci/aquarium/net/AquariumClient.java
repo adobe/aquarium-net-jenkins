@@ -500,6 +500,27 @@ public class AquariumClient {
     }
 
     /**
+     * Create a new label via streaming
+     */
+    public String createLabel(LabelOuterClass.Label labelProto) throws Exception {
+        LabelOuterClass.LabelServiceCreateRequest request = LabelOuterClass.LabelServiceCreateRequest.newBuilder()
+                .setLabel(labelProto)
+                .build();
+
+        Streaming.StreamingServiceConnectResponse response = sendStreamRequest("LabelServiceCreateRequest",
+            com.google.protobuf.Any.pack(request));
+
+        LabelOuterClass.LabelServiceCreateResponse labelResponse = response.getResponseData()
+            .unpack(LabelOuterClass.LabelServiceCreateResponse.class);
+
+        if (!labelResponse.getStatus()) {
+            throw new RuntimeException("Failed to create label: " + labelResponse.getMessage());
+        }
+
+        return labelResponse.getData().getUid();
+    }
+
+    /**
      * Deallocate an application via streaming
      */
     public void deallocateApplication(String applicationUid) throws Exception {

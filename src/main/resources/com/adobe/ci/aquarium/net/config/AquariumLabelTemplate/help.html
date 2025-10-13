@@ -1,0 +1,38 @@
+<div>
+    <p>Configure Aquarium Label Templates for use in pipeline steps.</p>
+
+    <p><strong>Template Content</strong> should be valid YAML that defines an Aquarium Label. You can use variables like <code>${variableName}</code> that will be substituted when the template is used.</p>
+
+    <p><strong>Predefined Variables:</strong></p>
+    <ul>
+        <li><code>${TIMESTAMP}</code> - Current timestamp in format YYMMDD.hhmmss</li>
+        <li><code>${NOW+N*UNIT}</code> - Current time plus offset (e.g., ${NOW+3*HOUR})</li>
+    </ul>
+
+    <p><strong>Example Template:</strong></p>
+    <pre>
+name: temp_ci-${name}-${TIMESTAMP}
+version: 0
+visible_for:
+  - jenkins
+  - jenkins-group
+remove_at: '${NOW+3*HOUR}'
+definitions:
+  - driver: aws
+    images:
+      - name: '${image}'
+    options:
+      instance_type: g4ad.8xlarge
+      security_groups:
+        - supergroup1
+        - supergroup2
+      userdata_format: env
+    resources:
+      cpu: 32
+      ram: 128
+      network: Subnet:build
+      lifetime: 4h
+metadata:
+  JENKINS_AGENT_WORKSPACE: /mnt/ws
+    </pre>
+</div>

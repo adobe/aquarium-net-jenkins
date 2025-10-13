@@ -1,0 +1,404 @@
+/**
+ * Copyright 2024-2025 Adobe. All rights reserved.
+ * This file is licensed to you under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License. You may obtain a copy
+ * of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTATIONS
+ * OF ANY KIND, either express or implied. See the License for the specific language
+ * governing permissions and limitations under the License.
+ */
+
+// Author: Sergei Parshev (@sparshev)
+
+package com.adobe.ci.aquarium.net.pipeline;
+
+import com.adobe.ci.aquarium.net.AquariumCloud;
+import com.adobe.ci.aquarium.net.config.AquariumLabelTemplate;
+import hudson.model.TaskListener;
+import hudson.util.LogTaskListener;
+import hudson.model.Node;
+import hudson.AbortException;
+import com.adobe.ci.aquarium.net.AquariumSlave;
+import org.jenkinsci.plugins.workflow.steps.StepContext;
+import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
+import jenkins.model.Jenkins;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.DumperOptions;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+import com.google.protobuf.Timestamp;
+import aquarium.v2.LabelOuterClass;
+
+import java.io.PrintStream;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+import java.util.logging.Logger;
+import java.util.logging.Level;
+
+public class AquariumCreateLabelStepExecution extends SynchronousNonBlockingStepExecution<String> {
+    private static final long serialVersionUID = 1L;
+    private static final transient Logger LOGGER = Logger.getLogger(AquariumCreateLabelStepExecution.class.getName());
+
+    private final AquariumCreateLabelStep step;
+
+    // Predefined variables
+    private static final Pattern TIMESTAMP_PATTERN = Pattern.compile("\\$\\{TIMESTAMP\\}");
+    private static final Pattern NOW_PATTERN = Pattern.compile("\\$\\{NOW\\+([0-9]+)\\*([A-Z]+)\\}");
+    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}");
+
+    AquariumCreateLabelStepExecution(AquariumCreateLabelStep step, StepContext context) {
+        super(context);
+        this.step = step;
+    }
+
+    private PrintStream logger() {
+        TaskListener l = null;
+        StepContext context = getContext();
+        try {
+            l = context.get(TaskListener.class);
+        } catch (Exception x) {
+            LOGGER.log(Level.WARNING, "Failed to find TaskListener in context");
+        } finally {
+            if (l == null) {
+                l = new LogTaskListener(LOGGER, Level.FINE);
+            }
+        }
+        return l.getLogger();
+    }
+
+    @Override
+    protected String run() throws Exception {
+        String templateId = step.getTemplateId();
+        Map<String, String> variables = step.getVariablesAsMap();
+
+        try {
+            LOGGER.fine("Starting Aquarium Create Label step with template: " + templateId);
+
+            Node node = getContext().get(Node.class);
+            if (!(node instanceof AquariumSlave)) {
+                throw new AbortException(
+                        String.format("Node is not an Aquarium node: %s", node != null ? node.getNodeName() : null));
+            }
+
+            AquariumSlave aquariumSlave = (AquariumSlave) node;
+            AquariumCloud cloud = aquariumSlave.getAquariumCloud();
+
+            // Find the template
+            AquariumLabelTemplate template = findTemplate(cloud, templateId);
+            if (template == null) {
+                throw new AbortException("Template not found: " + templateId);
+            }
+
+            // Process the template with variables
+            String processedTemplate = processTemplate(template.getTemplateContent(), variables);
+            logger().println("Processed template content: " + processedTemplate);
+
+            // Parse the YAML template to create Label proto
+            LabelOuterClass.Label labelProto = parseTemplateToLabel(processedTemplate);
+
+            // Create the label using the client
+            String labelUid = cloud.getClient().createLabel(labelProto);
+
+            logger().println("Created label with UID: " + labelUid);
+            return labelUid;
+
+        } catch (InterruptedException e) {
+            String msg = "Interrupted while creating Aquarium label";
+            logger().println(msg);
+            LOGGER.log(Level.FINE, msg);
+            return "";
+        } catch (Exception e) {
+            String msg = "Failed to create Aquarium label: " + e.getMessage();
+            logger().println(msg);
+            LOGGER.log(Level.WARNING, msg, e);
+            throw new AbortException(msg);
+        }
+    }
+
+    private AquariumLabelTemplate findTemplate(AquariumCloud cloud, String templateId) {
+        // First check the current cloud
+        List<AquariumLabelTemplate> templates = cloud.getLabelTemplates();
+        if (templates != null) {
+            for (AquariumLabelTemplate template : templates) {
+                if (templateId.equals(template.getId())) {
+                    return template;
+                }
+            }
+        }
+
+        // If not found in current cloud, search all clouds
+        for (hudson.slaves.Cloud c : Jenkins.get().clouds) {
+            if (c instanceof AquariumCloud && !c.equals(cloud)) {
+                AquariumCloud otherCloud = (AquariumCloud) c;
+                List<AquariumLabelTemplate> otherTemplates = otherCloud.getLabelTemplates();
+                if (otherTemplates != null) {
+                    for (AquariumLabelTemplate template : otherTemplates) {
+                        if (templateId.equals(template.getId())) {
+                            return template;
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String processTemplate(String template, Map<String, String> variables) throws Exception {
+        String result = template;
+
+        // Process predefined variables first
+        result = processPredefinedVariables(result);
+
+        // Process user variables
+        result = processUserVariables(result, variables);
+
+        // Check for unresolved variables
+        Matcher matcher = VARIABLE_PATTERN.matcher(result);
+        if (matcher.find()) {
+            throw new AbortException("Unresolved variable in template: ${" + matcher.group(1) + "}");
+        }
+
+        return result;
+    }
+
+    private String processPredefinedVariables(String template) {
+        String result = template;
+
+        // Process TIMESTAMP variable
+        LocalDateTime now = LocalDateTime.now();
+        String timestamp = now.format(DateTimeFormatter.ofPattern("yyMMdd.HHmmss"));
+        result = TIMESTAMP_PATTERN.matcher(result).replaceAll(timestamp);
+
+        // Process NOW+offset variables
+        Matcher nowMatcher = NOW_PATTERN.matcher(result);
+        StringBuffer sb = new StringBuffer();
+        while (nowMatcher.find()) {
+            int amount = Integer.parseInt(nowMatcher.group(1));
+            String unit = nowMatcher.group(2);
+
+            Instant targetTime = calculateTargetTime(now, amount, unit);
+            String isoString = targetTime.toString();
+            nowMatcher.appendReplacement(sb, isoString);
+        }
+        nowMatcher.appendTail(sb);
+        result = sb.toString();
+
+        return result;
+    }
+
+    private Instant calculateTargetTime(LocalDateTime base, int amount, String unit) {
+        Instant baseInstant = base.toInstant(ZoneOffset.UTC);
+
+        switch (unit.toUpperCase()) {
+            case "SECOND":
+                return baseInstant.plusSeconds(amount);
+            case "MINUTE":
+                return baseInstant.plusSeconds(amount * 60L);
+            case "HOUR":
+                return baseInstant.plusSeconds(amount * 3600L);
+            case "DAY":
+                return baseInstant.plusSeconds(amount * 86400L);
+            case "WEEK":
+                return baseInstant.plusSeconds(amount * 604800L);
+            case "MONTH":
+                return baseInstant.plusSeconds(amount * 2629746L); // Average month
+            case "YEAR":
+                return baseInstant.plusSeconds(amount * 31556952L); // Average year
+            default:
+                throw new IllegalArgumentException("Unknown time unit: " + unit);
+        }
+    }
+
+    private String processUserVariables(String template, Map<String, String> variables) {
+        String result = template;
+
+        for (Map.Entry<String, String> entry : variables.entrySet()) {
+            String placeholder = "${" + entry.getKey() + "}";
+            result = result.replace(placeholder, entry.getValue());
+        }
+
+        return result;
+    }
+
+    private LabelOuterClass.Label parseTemplateToLabel(String yamlContent) throws Exception {
+        Yaml yaml = new Yaml();
+        Map<String, Object> data = yaml.load(yamlContent);
+
+        LabelOuterClass.Label.Builder labelBuilder = LabelOuterClass.Label.newBuilder();
+
+        // Set basic fields
+        if (data.containsKey("name")) {
+            labelBuilder.setName((String) data.get("name"));
+        }
+
+        if (data.containsKey("version")) {
+            Object versionObj = data.get("version");
+            if (versionObj instanceof Integer) {
+                labelBuilder.setVersion((Integer) versionObj);
+            } else if (versionObj instanceof String) {
+                labelBuilder.setVersion(Integer.parseInt((String) versionObj));
+            }
+        }
+
+        if (data.containsKey("visible_for")) {
+            @SuppressWarnings("unchecked")
+            List<String> visibleFor = (List<String>) data.get("visible_for");
+            labelBuilder.addAllVisibleFor(visibleFor);
+        }
+
+        if (data.containsKey("remove_at")) {
+            String removeAtStr = (String) data.get("remove_at");
+            try {
+                Instant removeAtInstant = Instant.parse(removeAtStr);
+                Timestamp removeAtTimestamp = Timestamp.newBuilder()
+                    .setSeconds(removeAtInstant.getEpochSecond())
+                    .setNanos(removeAtInstant.getNano())
+                    .build();
+                labelBuilder.setRemoveAt(removeAtTimestamp);
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Failed to parse remove_at timestamp: " + removeAtStr, e);
+            }
+        }
+
+        // Set definitions
+        if (data.containsKey("definitions")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> definitions = (List<Map<String, Object>>) data.get("definitions");
+            for (Map<String, Object> def : definitions) {
+                LabelOuterClass.LabelDefinition.Builder defBuilder = LabelOuterClass.LabelDefinition.newBuilder();
+
+                if (def.containsKey("driver")) {
+                    defBuilder.setDriver((String) def.get("driver"));
+                }
+
+                // Add images
+                if (def.containsKey("images")) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> images = (List<Map<String, Object>>) def.get("images");
+                    for (Map<String, Object> img : images) {
+                        LabelOuterClass.Image.Builder imgBuilder = LabelOuterClass.Image.newBuilder();
+                        if (img.containsKey("name")) {
+                            imgBuilder.setName((String) img.get("name"));
+                        }
+                        if (img.containsKey("url")) {
+                            imgBuilder.setUrl((String) img.get("url"));
+                        }
+                        if (img.containsKey("version")) {
+                            imgBuilder.setVersion((String) img.get("version"));
+                        }
+                        if (img.containsKey("tag")) {
+                            imgBuilder.setTag((String) img.get("tag"));
+                        }
+                        defBuilder.addImages(imgBuilder.build());
+                    }
+                }
+
+                // Add options as Struct
+                if (def.containsKey("options")) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> options = (Map<String, Object>) def.get("options");
+                    defBuilder.setOptions(mapToStruct(options));
+                }
+
+                // Add resources
+                if (def.containsKey("resources")) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> resources = (Map<String, Object>) def.get("resources");
+                    LabelOuterClass.Resources.Builder resBuilder = LabelOuterClass.Resources.newBuilder();
+
+                    if (resources.containsKey("cpu")) {
+                        Object cpuObj = resources.get("cpu");
+                        if (cpuObj instanceof Integer) {
+                            resBuilder.setCpu((Integer) cpuObj);
+                        } else if (cpuObj instanceof String) {
+                            resBuilder.setCpu(Integer.parseInt((String) cpuObj));
+                        }
+                    }
+
+                    if (resources.containsKey("ram")) {
+                        Object ramObj = resources.get("ram");
+                        if (ramObj instanceof Integer) {
+                            resBuilder.setRam((Integer) ramObj);
+                        } else if (ramObj instanceof String) {
+                            resBuilder.setRam(Integer.parseInt((String) ramObj));
+                        }
+                    }
+
+                    if (resources.containsKey("network")) {
+                        resBuilder.setNetwork((String) resources.get("network"));
+                    }
+
+                    if (resources.containsKey("lifetime")) {
+                        resBuilder.setLifetime((String) resources.get("lifetime"));
+                    }
+
+                    defBuilder.setResources(resBuilder.build());
+                }
+
+                labelBuilder.addDefinitions(defBuilder.build());
+            }
+        }
+
+        // Set metadata
+        if (data.containsKey("metadata")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metadata = (Map<String, Object>) data.get("metadata");
+            labelBuilder.setMetadata(mapToStruct(metadata));
+        }
+
+        return labelBuilder.build();
+    }
+
+    private Struct mapToStruct(Map<String, Object> map) {
+        Struct.Builder structBuilder = Struct.newBuilder();
+
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            Value.Builder valueBuilder = Value.newBuilder();
+            Object value = entry.getValue();
+
+            if (value instanceof String) {
+                valueBuilder.setStringValue((String) value);
+            } else if (value instanceof Integer) {
+                valueBuilder.setNumberValue((Integer) value);
+            } else if (value instanceof Double) {
+                valueBuilder.setNumberValue((Double) value);
+            } else if (value instanceof Boolean) {
+                valueBuilder.setBoolValue((Boolean) value);
+            } else if (value instanceof List) {
+                // Handle lists by converting to JSON-like structure
+                @SuppressWarnings("unchecked")
+                List<Object> list = (List<Object>) value;
+                StringBuilder sb = new StringBuilder("[");
+                for (int i = 0; i < list.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append("\"").append(list.get(i).toString()).append("\"");
+                }
+                sb.append("]");
+                valueBuilder.setStringValue(sb.toString());
+            } else {
+                valueBuilder.setStringValue(value.toString());
+            }
+
+            structBuilder.putFields(entry.getKey(), valueBuilder.build());
+        }
+
+        return structBuilder.build();
+    }
+
+    @Override
+    public void stop(Throwable cause) throws Exception {
+        LOGGER.log(Level.FINE, "Stopping Aquarium Create Label step.");
+        super.stop(cause);
+    }
+}

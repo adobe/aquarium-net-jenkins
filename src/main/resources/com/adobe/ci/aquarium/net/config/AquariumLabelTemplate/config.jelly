@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+    <f:entry field="id" title="Template ID">
+        <f:textbox/>
+    </f:entry>
+    <f:entry field="name" title="Template Name">
+        <f:textbox/>
+    </f:entry>
+    <f:entry field="description" title="Description">
+        <f:textbox/>
+    </f:entry>
+    <f:entry field="templateContent" title="Template Content (YAML)">
+        <f:textarea rows="20" cols="80"/>
+    </f:entry>
+</j:jelly>
