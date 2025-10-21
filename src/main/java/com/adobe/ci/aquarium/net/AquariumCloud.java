@@ -117,6 +117,7 @@ public class AquariumCloud extends Cloud {
         this.jenkinsUrl = config.getJenkinsUrl();
         this.metadata = config.getAdditionalMetadata();
         this.labelFilter = config.getLabelFilter();
+        this.labelTemplates = config.getLabelTemplates();
         LOG.info("STARTING Aquarium CLOUD with config");
         // In integration tests, avoid background reconnection to keep test isolation
         this.reconnectClient = false;

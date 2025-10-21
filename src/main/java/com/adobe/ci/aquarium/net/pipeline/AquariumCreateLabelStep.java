@@ -17,7 +17,6 @@ package com.adobe.ci.aquarium.net.pipeline;
 import com.adobe.ci.aquarium.net.AquariumCloud;
 import com.adobe.ci.aquarium.net.config.TemplateVariable;
 import hudson.Extension;
-import hudson.model.Node;
 import hudson.util.ListBoxModel;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
@@ -106,7 +105,7 @@ public class AquariumCreateLabelStep extends Step implements Serializable {
 
         @Override
         public Set<? extends Class<?>> getRequiredContext() {
-            return Collections.unmodifiableSet(new HashSet<>(Arrays.asList(Node.class)));
+            return Collections.unmodifiableSet(new HashSet<>());
         }
 
         // Used to fill the pipeline step snippet generator `templateId` field

@@ -18,7 +18,6 @@ import com.adobe.ci.aquarium.net.AquariumCloud;
 import com.adobe.ci.aquarium.net.config.AquariumLabelTemplate;
 import hudson.model.TaskListener;
 import hudson.util.LogTaskListener;
-import hudson.model.Node;
 import hudson.AbortException;
 import com.adobe.ci.aquarium.net.AquariumSlave;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
@@ -28,8 +27,10 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.DumperOptions;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
+import com.google.protobuf.ListValue;
 import com.google.protobuf.Timestamp;
 import aquarium.v2.LabelOuterClass;
+import aquarium.v2.Common;
 
 import java.io.PrintStream;
 import java.time.Instant;
@@ -84,45 +85,44 @@ public class AquariumCreateLabelStepExecution extends SynchronousNonBlockingStep
         try {
             LOGGER.fine("Starting Aquarium Create Label step with template: " + templateId);
 
-            Node node = getContext().get(Node.class);
-            if (!(node instanceof AquariumSlave)) {
-                throw new AbortException(
-                        String.format("Node is not an Aquarium node: %s", node != null ? node.getNodeName() : null));
+            // Since it makes sense to execute the step outside the Aquarium worker, we get through the available clouds
+            // to find the right one where the task exists. That should not cause any issues because jenkins is usually
+            // connected to just one Aquarium cluster at a time.
+            List<AquariumCloud> clouds = Jenkins.get().clouds.getAll(AquariumCloud.class);
+            for( AquariumCloud cloud : clouds ) {
+                try {
+                    // Find the template
+                    AquariumLabelTemplate template = findTemplate(cloud, templateId);
+                    if (template == null) {
+                        throw new AbortException("Template not found: " + templateId);
+                    }
+
+                    // Process the template with variables
+                    String processedTemplate = processTemplate(template.getTemplateContent(), variables);
+                    logger().println("Processed template content: " + processedTemplate);
+
+                    // Parse the YAML template to create Label proto
+                    LabelOuterClass.Label labelProto = parseTemplateToLabel(processedTemplate);
+
+                    // Create the label using the client
+                    String labelUid = cloud.getClient().createLabel(labelProto);
+
+                    logger().println("Created label with UID: " + labelUid);
+                    return labelUid;
+                } catch (Exception e) {
+                    String msg = e.getMessage();
+                    logger().println(msg);
+                    LOGGER.log(Level.INFO, msg, e);
+                }
             }
-
-            AquariumSlave aquariumSlave = (AquariumSlave) node;
-            AquariumCloud cloud = aquariumSlave.getAquariumCloud();
-
-            // Find the template
-            AquariumLabelTemplate template = findTemplate(cloud, templateId);
-            if (template == null) {
-                throw new AbortException("Template not found: " + templateId);
-            }
-
-            // Process the template with variables
-            String processedTemplate = processTemplate(template.getTemplateContent(), variables);
-            logger().println("Processed template content: " + processedTemplate);
-
-            // Parse the YAML template to create Label proto
-            LabelOuterClass.Label labelProto = parseTemplateToLabel(processedTemplate);
-
-            // Create the label using the client
-            String labelUid = cloud.getClient().createLabel(labelProto);
-
-            logger().println("Created label with UID: " + labelUid);
-            return labelUid;
-
-        } catch (InterruptedException e) {
-            String msg = "Interrupted while creating Aquarium label";
-            logger().println(msg);
-            LOGGER.log(Level.FINE, msg);
-            return "";
         } catch (Exception e) {
             String msg = "Failed to create Aquarium label: " + e.getMessage();
             logger().println(msg);
             LOGGER.log(Level.WARNING, msg, e);
             throw new AbortException(msg);
         }
+
+        return "";
     }
 
     private AquariumLabelTemplate findTemplate(AquariumCloud cloud, String templateId) {
@@ -346,6 +346,36 @@ public class AquariumCreateLabelStepExecution extends SynchronousNonBlockingStep
                     defBuilder.setResources(resBuilder.build());
                 }
 
+                // Add authentication
+                if (def.containsKey("authentication")) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> authentication = (Map<String, Object>) def.get("authentication");
+                    Common.Authentication.Builder authBuilder = Common.Authentication.newBuilder();
+
+                    if (authentication.containsKey("username")) {
+                        authBuilder.setUsername((String) authentication.get("username"));
+                    }
+
+                    if (authentication.containsKey("password")) {
+                        authBuilder.setPassword((String) authentication.get("password"));
+                    }
+
+                    if (authentication.containsKey("key")) {
+                        authBuilder.setKey((String) authentication.get("key"));
+                    }
+
+                    if (authentication.containsKey("port")) {
+                        Object portObj = authentication.get("port");
+                        if (portObj instanceof Integer) {
+                            authBuilder.setPort((Integer) portObj);
+                        } else if (portObj instanceof String) {
+                            authBuilder.setPort(Integer.parseInt((String) portObj));
+                        }
+                    }
+
+                    defBuilder.setAuthentication(authBuilder.build());
+                }
+
                 labelBuilder.addDefinitions(defBuilder.build());
             }
         }
@@ -364,36 +394,53 @@ public class AquariumCreateLabelStepExecution extends SynchronousNonBlockingStep
         Struct.Builder structBuilder = Struct.newBuilder();
 
         for (Map.Entry<String, Object> entry : map.entrySet()) {
-            Value.Builder valueBuilder = Value.newBuilder();
-            Object value = entry.getValue();
-
-            if (value instanceof String) {
-                valueBuilder.setStringValue((String) value);
-            } else if (value instanceof Integer) {
-                valueBuilder.setNumberValue((Integer) value);
-            } else if (value instanceof Double) {
-                valueBuilder.setNumberValue((Double) value);
-            } else if (value instanceof Boolean) {
-                valueBuilder.setBoolValue((Boolean) value);
-            } else if (value instanceof List) {
-                // Handle lists by converting to JSON-like structure
-                @SuppressWarnings("unchecked")
-                List<Object> list = (List<Object>) value;
-                StringBuilder sb = new StringBuilder("[");
-                for (int i = 0; i < list.size(); i++) {
-                    if (i > 0) sb.append(", ");
-                    sb.append("\"").append(list.get(i).toString()).append("\"");
-                }
-                sb.append("]");
-                valueBuilder.setStringValue(sb.toString());
-            } else {
-                valueBuilder.setStringValue(value.toString());
-            }
-
-            structBuilder.putFields(entry.getKey(), valueBuilder.build());
+            structBuilder.putFields(entry.getKey(), objectToValue(entry.getValue()));
         }
 
         return structBuilder.build();
+    }
+
+    private Value objectToValue(Object obj) {
+        Value.Builder valueBuilder = Value.newBuilder();
+
+        if (obj == null) {
+            valueBuilder.setNullValue(com.google.protobuf.NullValue.NULL_VALUE);
+        } else if (obj instanceof String) {
+            valueBuilder.setStringValue((String) obj);
+        } else if (obj instanceof Integer) {
+            valueBuilder.setNumberValue((Integer) obj);
+        } else if (obj instanceof Long) {
+            valueBuilder.setNumberValue((Long) obj);
+        } else if (obj instanceof Float) {
+            valueBuilder.setNumberValue((Float) obj);
+        } else if (obj instanceof Double) {
+            valueBuilder.setNumberValue((Double) obj);
+        } else if (obj instanceof Boolean) {
+            valueBuilder.setBoolValue((Boolean) obj);
+        } else if (obj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Object> list = (List<Object>) obj;
+            valueBuilder.setListValue(listToListValue(list));
+        } else if (obj instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) obj;
+            valueBuilder.setStructValue(mapToStruct(map));
+        } else {
+            // Fallback for unknown types
+            valueBuilder.setStringValue(obj.toString());
+        }
+
+        return valueBuilder.build();
+    }
+
+    private ListValue listToListValue(List<Object> list) {
+        ListValue.Builder listBuilder = ListValue.newBuilder();
+
+        for (Object item : list) {
+            listBuilder.addValues(objectToValue(item));
+        }
+
+        return listBuilder.build();
     }
 
     @Override
