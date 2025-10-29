@@ -61,7 +61,7 @@
         <maven.test.redirectTestOutputToFile>false</maven.test.redirectTestOutputToFile>
 
         <!-- Aquarium-Fish pregenerated proto -->
-        <aquarium-fish-java.version>0.9.1</aquarium-fish-java.version>
+        <aquarium-fish-java.version>0.10.1</aquarium-fish-java.version>
     </properties>
 
     <profiles>

@@ -49,10 +49,6 @@ public class AquariumSlave extends AbstractCloudSlave {
     private static final Integer DISCONNECTION_TIMEOUT = Integer
             .getInteger(AquariumSlave.class.getName() + ".disconnectionTimeout", 5);
 
-    // Grace period to allow in-flight requests to complete before channel closure
-    private static final Integer GRACE_PERIOD_MS = Integer
-            .getInteger(AquariumSlave.class.getName() + ".gracePeriodMs", 1000);
-
     private static final long serialVersionUID = -8642936855413034232L;
     private static final String DEFAULT_AGENT_PREFIX = "fish";
 
@@ -160,12 +156,6 @@ public class AquariumSlave extends AbstractCloudSlave {
                 Future<Void> disconnectorFuture = ch.callAsync(new SlaveDisconnector());
                 disconnectorFuture.get(DISCONNECTION_TIMEOUT, TimeUnit.SECONDS);
                 LOG.log(Level.FINE, "Successfully sent disconnect order to agent " + this.name);
-
-                // Give a brief grace period for any in-flight requests to complete
-                // This reduces harmless but noisy ChannelClosedException warnings
-                // for class loading or jar transfer operations
-                Thread.sleep(GRACE_PERIOD_MS);
-                LOG.log(Level.FINEST, "Grace period completed for agent " + this.name);
             } catch (InterruptedException e) {
                 // Restore interrupt status and continue with termination
                 Thread.currentThread().interrupt();
@@ -178,7 +168,8 @@ public class AquariumSlave extends AbstractCloudSlave {
             }
         }
 
-        // Now it's safe to disconnect the computer (closes the channel)
+        // Now disconnect the computer (closes the channel)
+        // Any in-flight requests will be cancelled, which is acceptable since the agent is terminating
         if( !(computer.getOfflineCause() instanceof AquariumOfflineCause) ) {
             computer.disconnect(new AquariumOfflineCause());
             LOG.log(Level.INFO, "Disconnected computer for node '" + name + "'.");
