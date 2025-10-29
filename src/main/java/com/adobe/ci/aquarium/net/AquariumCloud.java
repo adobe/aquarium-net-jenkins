@@ -84,10 +84,18 @@ public class AquariumCloud extends Cloud {
     private transient volatile boolean connected = false;
     private transient boolean reconnectClient = true;
 
+    // Track connection timeout timers by agent node name for proper cleanup
+    private transient Map<String, java.util.TimerTask> agentConnectionTimers = new ConcurrentHashMap<>();
+
+    // Track application state listeners by agent node name for proper cleanup
+    private transient Map<String, AquariumClient.ApplicationStateListener> applicationStateListeners = new ConcurrentHashMap<>();
+
     @DataBoundConstructor
     public AquariumCloud(String name) {
         super(name);
-        LOG.info("STARTING Aquarium CLOUD");
+        this.agentConnectionTimers = new ConcurrentHashMap<>();
+        this.applicationStateListeners = new ConcurrentHashMap<>();
+        LOG.info("STARTING Aquarium CLOUD from name");
     }
 
     /**
@@ -97,6 +105,8 @@ public class AquariumCloud extends Cloud {
      */
     public AquariumCloud(String name, AquariumCloudConfiguration config) {
         super(name);
+        this.agentConnectionTimers = new ConcurrentHashMap<>();
+        this.applicationStateListeners = new ConcurrentHashMap<>();
         this.enabled = config.isEnabled();
         this.initAddressUrl = config.getInitAddress();
         this.credentialsId = config.getCredentialsId();
@@ -105,10 +115,27 @@ public class AquariumCloud extends Cloud {
         this.jenkinsUrl = config.getJenkinsUrl();
         this.metadata = config.getAdditionalMetadata();
         this.labelFilter = config.getLabelFilter();
-        LOG.info("STARTING Aquarium CLOUD");
+        LOG.info("STARTING Aquarium CLOUD with config");
         // In integration tests, avoid background reconnection to keep test isolation
         this.reconnectClient = false;
         initializeConnection();
+    }
+
+    /**
+     * Ensure transient fields are initialized after deserialization
+     */
+    protected Object readResolve() {
+        if (fishLabelsCache == null) {
+            fishLabelsCache = new ConcurrentHashMap<>();
+        }
+        if (agentConnectionTimers == null) {
+            agentConnectionTimers = new ConcurrentHashMap<>();
+        }
+        if (applicationStateListeners == null) {
+            applicationStateListeners = new ConcurrentHashMap<>();
+        }
+        LOG.info("STARTING Aquarium CLOUD from serialized");
+        return this;
     }
 
     /**
@@ -122,9 +149,31 @@ public class AquariumCloud extends Cloud {
 
         try {
             if (client != null) {
-                client.connect();
-                return;
+                // Check if already connected
+                if (client.isConnected()) {
+                    LOG.log(Level.FINE, "Client already connected for cloud " + name);
+                    return;
+                }
+                // Try to reconnect existing client
+                try {
+                    client.connect();
+                    connected = true;
+                    refreshLabels();
+                    LOG.log(Level.INFO, "Reconnected to Aquarium Fish node for cloud " + name);
+                    return;
+                } catch (Exception e) {
+                    // Connection failed, clean up and create new client
+                    LOG.log(Level.WARNING, "Failed to reconnect existing client, creating new one", e);
+                    try {
+                        client.shutdown();
+                    } catch (Exception ex) {
+                        LOG.log(Level.WARNING, "Error shutting down old client", ex);
+                    }
+                    client = null;
+                }
             }
+
+            // Create new client
             client = newClient();
             setupLabelListeners();
             client.connect();
@@ -175,7 +224,7 @@ public class AquariumCloud extends Cloud {
                 com.adobe.ci.aquarium.net.model.Label removed = fishLabelsCache.remove(labelUid);
                 if (removed != null) {
                     updateJenkinsLabelsCache();
-                    LOG.log(Level.INFO, "Removed Fish label: " + removed.getName() + ":" + label.getVersion() + " (" + label.getUid() + ")");
+                    LOG.log(Level.INFO, "Removed Fish label: " + removed.getName() + ":" + removed.getVersion() + " (" + removed.getUid() + ")");
                 }
             }
         });
@@ -443,6 +492,30 @@ public class AquariumCloud extends Cloud {
      * Disconnect from Fish node and cleanup resources
      */
     private void disconnectFromFish() {
+        // Cancel all pending connection timeout timers
+        for (Map.Entry<String, java.util.TimerTask> entry : agentConnectionTimers.entrySet()) {
+            try {
+                entry.getValue().cancel();
+                LOG.log(Level.FINE, "Cancelled connection timeout timer for agent " + entry.getKey());
+            } catch (Exception e) {
+                LOG.log(Level.FINE, "Error cancelling timer for agent " + entry.getKey(), e);
+            }
+        }
+        agentConnectionTimers.clear();
+
+        // Remove all application state listeners
+        if (client != null) {
+            for (Map.Entry<String, AquariumClient.ApplicationStateListener> entry : applicationStateListeners.entrySet()) {
+                try {
+                    client.removeApplicationStateListener(entry.getValue());
+                    LOG.log(Level.FINE, "Removed application state listener for agent " + entry.getKey());
+                } catch (Exception e) {
+                    LOG.log(Level.FINE, "Error removing listener for agent " + entry.getKey(), e);
+                }
+            }
+        }
+        applicationStateListeners.clear();
+
         if (client != null) {
             try {
                 client.shutdown();
@@ -558,7 +631,7 @@ public class AquariumCloud extends Cloud {
         }
         // Picking the right label version from the list
         for (com.adobe.ci.aquarium.net.model.Label label : fishLabelsCache.values()) {
-            if (label.getName().equals(fishLabelName) {
+            if (label.getName().equals(fishLabelName)) {
                 if (fishLabelVersion == null) {
                     // Looking for the latest label version
                     if (fishLabelObj == null || label.getVersion() > fishLabelObj.getVersion()) {
@@ -657,9 +730,14 @@ public class AquariumCloud extends Cloud {
      * Setup monitoring for application state changes
      */
     private void setupApplicationStateMonitoring(AquariumSlave agent, String applicationUid) {
-        client.monitorApplicationState(applicationUid, (applicationState) -> {
+        String nodeName = agent.getNodeName();
+
+        // Remove any existing listener for this agent (shouldn't happen, but be safe)
+        removeApplicationStateListener(nodeName);
+
+        AquariumClient.ApplicationStateListener listener = client.monitorApplicationState(applicationUid, (applicationState) -> {
             LOG.log(Level.INFO, "Application " + applicationUid + " state changed to: " +
-                    applicationState.getStatus() + " for agent " + agent.getNodeName());
+                    applicationState.getStatus() + " for agent " + nodeName);
 
             switch (applicationState.getStatus()) {
                 case ALLOCATED:
@@ -670,6 +748,8 @@ public class AquariumCloud extends Cloud {
                 case ERROR:
                     LOG.log(Level.SEVERE, "Application " + applicationUid + " failed: " +
                             applicationState.getDescription());
+                    // Clean up listener since this is a terminal state
+                    removeApplicationStateListener(nodeName);
                     try {
                         agent.terminate();
                     } catch (IOException | InterruptedException e) {
@@ -679,6 +759,8 @@ public class AquariumCloud extends Cloud {
 
                 case DEALLOCATED:
                     LOG.log(Level.INFO, "Application " + applicationUid + " was deallocated");
+                    // Clean up listener since this is a terminal state
+                    removeApplicationStateListener(nodeName);
                     try {
                         agent.terminate();
                     } catch (IOException | InterruptedException e) {
@@ -693,6 +775,20 @@ public class AquariumCloud extends Cloud {
                     break;
             }
         });
+
+        // Store the listener for cleanup when agent is terminated
+        applicationStateListeners.put(nodeName, listener);
+    }
+
+    /**
+     * Remove and cleanup application state listener for a specific agent
+     */
+    private void removeApplicationStateListener(String nodeName) {
+        AquariumClient.ApplicationStateListener listener = applicationStateListeners.remove(nodeName);
+        if (listener != null && client != null) {
+            client.removeApplicationStateListener(listener);
+            LOG.log(Level.FINE, "Removed application state listener for agent " + nodeName);
+        }
     }
 
 
@@ -812,6 +908,14 @@ public class AquariumCloud extends Cloud {
     }
 
     public void onTerminate(AquariumSlave slave) {
+        String nodeName = slave.getNodeName();
+
+        // Cancel any pending connection timeout timer for this agent
+        cancelAgentConnectionTimer(nodeName);
+
+        // Remove application state listener for this agent
+        removeApplicationStateListener(nodeName);
+
         // Handle slave termination - deallocate application if connected
         if (connected && client != null) {
             try {
@@ -819,11 +923,26 @@ public class AquariumCloud extends Cloud {
                 UUID applicationUID = slave.getApplicationUID();
                 if (applicationUID != null) {
                     client.deallocateApplication(applicationUID.toString());
-                    LOG.log(Level.INFO, "Deallocated application " + applicationUID + " for terminated agent " + slave.getNodeName());
+                    LOG.log(Level.INFO, "Deallocated application " + applicationUID + " for terminated agent " + nodeName);
+                } else {
+                    LOG.log(Level.FINE, "No application UID set for agent " + nodeName + ", skipping deallocation");
                 }
             } catch (Exception e) {
-                LOG.log(Level.WARNING, "Failed to deallocate application for terminated agent " + slave.getNodeName(), e);
+                LOG.log(Level.WARNING, "Failed to deallocate application for terminated agent " + nodeName, e);
             }
+        } else {
+            LOG.log(Level.FINE, "Not connected to Fish, cannot deallocate application for agent " + nodeName);
+        }
+    }
+
+    /**
+     * Cancel the connection timeout timer for a specific agent
+     */
+    private void cancelAgentConnectionTimer(String nodeName) {
+        java.util.TimerTask timer = agentConnectionTimers.remove(nodeName);
+        if (timer != null) {
+            timer.cancel();
+            LOG.log(Level.FINE, "Cancelled connection timeout timer for agent " + nodeName);
         }
     }
 
@@ -846,27 +965,56 @@ public class AquariumCloud extends Cloud {
      * Start agent connection timeout monitoring
      */
     private void startAgentConnectionTimeout(AquariumSlave agent) {
-        LOG.log(Level.INFO, "Application allocated for agent " + agent.getNodeName() + ", starting connection timeout");
+        String nodeName = agent.getNodeName();
+        LOG.log(Level.INFO, "Application allocated for agent " + nodeName + ", starting connection timeout");
+
+        // Cancel any existing timer for this agent (shouldn't happen, but be safe)
+        cancelAgentConnectionTimer(nodeName);
 
         // Schedule a timeout check
         long timeoutMs = getAgentConnectWaitMin() * 60L * 1000L; // Convert minutes to milliseconds
 
-        java.util.Timer timer = new java.util.Timer(true);
-        timer.schedule(new java.util.TimerTask() {
+        java.util.Timer timer = new java.util.Timer("AquariumAgentTimeout-" + nodeName, true);
+        java.util.TimerTask task = new java.util.TimerTask() {
             @Override
             public void run() {
-                // Check if agent is connected
-                Computer computer = agent.toComputer();
-                if (computer == null || !computer.isOnline()) {
-                    LOG.log(Level.WARNING, "Agent " + agent.getNodeName() + " failed to connect within timeout, terminating");
-                    try {
-                        agent.terminate();
-                    } catch (Exception e) {
-                        LOG.log(Level.SEVERE, "Failed to terminate agent " + agent.getNodeName(), e);
+                try {
+                    // Remove from tracking map since we're executing
+                    agentConnectionTimers.remove(nodeName);
+
+                    // Check if agent still exists in Jenkins
+                    hudson.model.Node node = Jenkins.get().getNode(nodeName);
+                    if (node == null) {
+                        LOG.log(Level.FINE, "Agent " + nodeName + " no longer exists, skipping timeout check");
+                        return;
                     }
+
+                    // Check if agent is connected
+                    Computer computer = agent.toComputer();
+                    if (computer == null) {
+                        LOG.log(Level.FINE, "Computer is null for agent " + nodeName + ", node may have been removed");
+                        return;
+                    }
+
+                    if (!computer.isOnline()) {
+                        LOG.log(Level.WARNING, "Agent " + nodeName + " failed to connect within timeout, terminating");
+                        try {
+                            agent.terminate();
+                        } catch (Exception e) {
+                            LOG.log(Level.SEVERE, "Failed to terminate agent " + nodeName, e);
+                        }
+                    } else {
+                        LOG.log(Level.FINE, "Agent " + nodeName + " is online, timeout check passed");
+                    }
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "Error in connection timeout check for agent " + nodeName, e);
                 }
             }
-        }, timeoutMs);
+        };
+
+        // Store the task for later cancellation if needed
+        agentConnectionTimers.put(nodeName, task);
+        timer.schedule(task, timeoutMs);
     }
 
     @Override

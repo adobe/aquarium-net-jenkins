@@ -106,8 +106,21 @@ public class AquariumClient {
      * Connect to the Aquarium Fish cluster
      */
     public void connect() throws Exception {
-        if (connected) {
+        if (connected && channel != null && !channel.isShutdown()) {
             return;
+        }
+
+        // Ensure any previous channel is properly shut down
+        if (channel != null && !channel.isShutdown()) {
+            LOGGER.info("Shutting down existing channel before reconnection");
+            try {
+                channel.shutdown();
+                if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
+                    channel.shutdownNow();
+                }
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Error shutting down existing channel", e);
+            }
         }
 
         // Reset shutdown flag for a fresh connection lifecycle
@@ -357,12 +370,15 @@ public class AquariumClient {
      */
     private void handleSubscribeResponse(Streaming.StreamingServiceSubscribeResponse response) {
         if (response.getObjectType() == Streaming.SubscriptionType.SUBSCRIPTION_TYPE_APPLICATION_STATE) {
-            // Handle application state changes
-            try {
-                ApplicationOuterClass.ApplicationState state = response.getObjectData().unpack(ApplicationOuterClass.ApplicationState.class);
-                notifyApplicationStateChange(new ApplicationState(state));
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Failed to handle application state change", e);
+            // We need only created application states here
+            if (response.getChangeType() == Streaming.ChangeType.CHANGE_TYPE_CREATED) {
+                // Handle application state changes
+                try {
+                    ApplicationOuterClass.ApplicationState state = response.getObjectData().unpack(ApplicationOuterClass.ApplicationState.class);
+                    notifyApplicationStateChange(new ApplicationState(state));
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Failed to handle application state change", e);
+                }
             }
         } else if (response.getObjectType() == Streaming.SubscriptionType.SUBSCRIPTION_TYPE_LABEL) {
             // Handle label changes
@@ -613,15 +629,24 @@ public class AquariumClient {
     }
 
     // Application state monitoring
-    public void monitorApplicationState(String applicationUid, Consumer<ApplicationState> callback) {
-        stateListeners.add(new ApplicationStateListener() {
+    public ApplicationStateListener monitorApplicationState(String applicationUid, Consumer<ApplicationState> callback) {
+        ApplicationStateListener listener = new ApplicationStateListener() {
             @Override
             public void onStateChange(ApplicationState state) {
                 if (applicationUid.equals(state.getApplicationUid())) {
                     callback.accept(state);
                 }
             }
-        });
+        };
+        stateListeners.add(listener);
+        return listener;
+    }
+
+    // Remove application state listener
+    public void removeApplicationStateListener(ApplicationStateListener listener) {
+        if (listener != null) {
+            stateListeners.remove(listener);
+        }
     }
 
     private void notifyApplicationStateChange(ApplicationState state) {
@@ -716,18 +741,44 @@ public class AquariumClient {
             connectionError = null;
             notifyConnectionStatusChanged(false);
 
+            // Properly close streams before shutting down channel
             if (connectStream != null) {
-                connectStream.onCompleted();
+                try {
+                    connectStream.onCompleted();
+                } catch (Exception e) {
+                    LOGGER.log(Level.FINE, "Error completing connect stream", e);
+                }
+                connectStream = null;
             }
 
             if (subscribeStream != null) {
-                subscribeStream.onCompleted();
+                try {
+                    subscribeStream.onCompleted();
+                } catch (Exception e) {
+                    LOGGER.log(Level.FINE, "Error completing subscribe stream", e);
+                }
+                subscribeStream = null;
             }
 
+            // Clear pending requests
+            pendingRequests.clear();
+
+            // Shutdown channel with proper timeout
             if (channel != null && !channel.isShutdown()) {
                 channel.shutdown();
-                if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
+                try {
+                    if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
+                        LOGGER.warning("Channel did not terminate within timeout, forcing shutdown");
+                        channel.shutdownNow();
+                        // Give it a bit more time after forced shutdown
+                        if (!channel.awaitTermination(2, TimeUnit.SECONDS)) {
+                            LOGGER.warning("Channel did not terminate even after forced shutdown");
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    LOGGER.log(Level.WARNING, "Interrupted while waiting for channel termination", e);
                     channel.shutdownNow();
+                    Thread.currentThread().interrupt();
                 }
             }
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [ ! -f aquarium-fish-java-shaded.jar ]; then
+if [ ! -f "aquarium-fish-java-shaded-${aquarium_fish_version}.jar" ]; then
     aquarium_fish_version=$(mvn --batch-mode help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)
 
     echo 'Download and install release artifact from github'

@@ -49,11 +49,14 @@ public class AquariumSlave extends AbstractCloudSlave {
     private static final Integer DISCONNECTION_TIMEOUT = Integer
             .getInteger(AquariumSlave.class.getName() + ".disconnectionTimeout", 5);
 
+    // Grace period to allow in-flight requests to complete before channel closure
+    private static final Integer GRACE_PERIOD_MS = Integer
+            .getInteger(AquariumSlave.class.getName() + ".gracePeriodMs", 1000);
+
     private static final long serialVersionUID = -8642936855413034232L;
     private static final String DEFAULT_AGENT_PREFIX = "fish";
 
     private final String cloudName;
-    private transient Set<Queue.Executable> executables = new HashSet<>();
 
     private UUID application_uid;
 
@@ -127,44 +130,58 @@ public class AquariumSlave extends AbstractCloudSlave {
     synchronized protected void _terminate(TaskListener listener) throws IOException, InterruptedException {
         LOG.log(Level.INFO, "Terminating Aquarium resource for agent {0}", this.name);
 
-        AquariumCloud cloud;
-        try {
-            cloud = getAquariumCloud();
-        } catch (IllegalStateException e) {
-            String msg = String.format("Unable to terminate agent %s Application %s: %s. Cloud may have been removed." +
-                    " There may be leftover resources on the Aquarium cluster.", this.name, this.application_uid, e);
-            e.printStackTrace(listener.fatalError(msg));
-            LOG.log(Level.SEVERE, msg);
-            return;
-        }
-        cloud.onTerminate(this);
-
         Computer computer = toComputer();
         if (computer == null) {
             String msg = String.format("Computer for agent is null: %s", this.name);
             LOG.log(Level.SEVERE, msg);
             listener.fatalError(msg);
+            // Still try to cleanup cloud resources even if computer is null
+            if (getCloudName() != null) {
+                try {
+                    AquariumCloud cloud = getAquariumCloud();
+                    cloud.onTerminate(this);
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "Error cleaning up cloud resources for agent " + this.name, e);
+                }
+            }
             return;
         }
+
         // Mark the computer as intentionally disconnecting so channel listeners do not abort pipelines
         if (computer instanceof AquariumComputer) {
             ((AquariumComputer) computer).markIntentionalDisconnect();
         }
+
+        // CRITICAL: Tell the slave to stop JNLP reconnects BEFORE disconnecting
+        // The channel needs to be open to send this command
+        VirtualChannel ch = computer.getChannel();
+        if (ch != null) {
+            try {
+                Future<Void> disconnectorFuture = ch.callAsync(new SlaveDisconnector());
+                disconnectorFuture.get(DISCONNECTION_TIMEOUT, TimeUnit.SECONDS);
+                LOG.log(Level.FINE, "Successfully sent disconnect order to agent " + this.name);
+
+                // Give a brief grace period for any in-flight requests to complete
+                // This reduces harmless but noisy ChannelClosedException warnings
+                // for class loading or jar transfer operations
+                Thread.sleep(GRACE_PERIOD_MS);
+                LOG.log(Level.FINEST, "Grace period completed for agent " + this.name);
+            } catch (InterruptedException e) {
+                // Restore interrupt status and continue with termination
+                Thread.currentThread().interrupt();
+                LOG.log(Level.FINE, "Interrupted during agent termination for " + this.name);
+            } catch (ExecutionException | TimeoutException e) {
+                String msg = String.format("Ignoring error sending order to not reconnect agent %s: %s", this.name, e.getMessage());
+                LOG.log(Level.INFO, msg, e);
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Unexpected error sending disconnect order to agent " + this.name, e);
+            }
+        }
+
+        // Now it's safe to disconnect the computer (closes the channel)
         if( !(computer.getOfflineCause() instanceof AquariumOfflineCause) ) {
             computer.disconnect(new AquariumOfflineCause());
             LOG.log(Level.INFO, "Disconnected computer for node '" + name + "'.");
-        }
-
-        // Tell the slave to stop JNLP reconnects.
-        VirtualChannel ch = computer.getChannel();
-        if (ch != null) {
-            Future<Void> disconnectorFuture = ch.callAsync(new SlaveDisconnector());
-            try {
-                disconnectorFuture.get(DISCONNECTION_TIMEOUT, TimeUnit.SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                String msg = String.format("Ignoring error sending order to not reconnect agent %s: %s", this.name, e.getMessage());
-                LOG.log(Level.INFO, msg, e);
-            }
         }
 
         if (getCloudName() == null) {
@@ -177,6 +194,18 @@ public class AquariumSlave extends AbstractCloudSlave {
         // Application deallocation is now handled by AquariumCloud.onTerminate() via streaming
         // No need for blocking loops here - the cloud handles cleanup asynchronously
         LOG.log(Level.INFO, "Agent termination delegated to cloud for proper application cleanup");
+
+        AquariumCloud cloud;
+        try {
+            cloud = getAquariumCloud();
+        } catch (IllegalStateException e) {
+            String msg = String.format("Unable to terminate agent %s Application %s: %s. Cloud may have been removed." +
+                    " There may be leftover resources on the Aquarium cluster.", this.name, this.application_uid, e);
+            e.printStackTrace(listener.fatalError(msg));
+            LOG.log(Level.SEVERE, msg);
+            return;
+        }
+        cloud.onTerminate(this);
 
         String msg = String.format("Disconnected computer %s", name);
         LOG.log(Level.INFO, msg);
@@ -212,11 +241,6 @@ public class AquariumSlave extends AbstractCloudSlave {
     public Launcher createLauncher(TaskListener listener) {
         Launcher launcher = super.createLauncher(listener);
         return launcher;
-    }
-
-    protected Object readResolve() {
-        this.executables = new HashSet<>();
-        return this;
     }
 
     /**
