@@ -280,6 +280,10 @@ public class AquariumFishTestHelper extends ExternalResource {
                 RoleOuterClass.Permission.newBuilder()
                     .setResource("LabelService").setAction("List").build()
             )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("LabelService").setAction("Get").build()
+            )
             // User - StreamingService
             .addPermissions(
                 RoleOuterClass.Permission.newBuilder()
@@ -342,27 +346,6 @@ public class AquariumFishTestHelper extends ExternalResource {
     public String createTestLabel() throws Exception {
         LOGGER.info("Creating test label...");
 
-        // Create label definition with proper protobuf structure
-        Struct options = Struct.newBuilder()
-            .putFields("images", Value.newBuilder()
-                .setListValue(ListValue.newBuilder()
-                    .addValues(Value.newBuilder()
-                        .setStructValue(Struct.newBuilder()
-                            .putFields("name", Value.newBuilder()
-                                .setStringValue("jenkins-agent-docker")
-                                .build())
-                            .putFields("version", Value.newBuilder()
-                                .setStringValue("java11")
-                                .build())
-                            .putFields("url", Value.newBuilder()
-                                .setStringValue("http://predefined/image")
-                                .build())
-                            .build())
-                    .build())
-                .build())
-            .build())
-        .build();
-
         LabelOuterClass.Resources resources = LabelOuterClass.Resources.newBuilder()
             .setCpu(1)
             .setRam(1)
@@ -371,7 +354,10 @@ public class AquariumFishTestHelper extends ExternalResource {
 
         LabelOuterClass.LabelDefinition definition = LabelOuterClass.LabelDefinition.newBuilder()
             .setDriver("docker")
-            .setOptions(options)
+            .addImages(LabelOuterClass.Image.newBuilder()
+                .setName("jenkins-agent-docker")
+                .setVersion("java11")
+                .setUrl("http://predefined/image"))
             .setResources(resources)
             .build();
 
