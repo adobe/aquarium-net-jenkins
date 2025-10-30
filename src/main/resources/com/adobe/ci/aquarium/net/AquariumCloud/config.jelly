@@ -45,4 +45,9 @@
         <f:repeatableHeteroProperty field="labelMappings" hasHeader="true" addCaption="${%Add Label Mapping}"
                                     deleteCaption="${%Delete Label Mapping}" />
     </f:entry>
+
+    <f:entry title="${%Label Templates}" field="labelTemplates">
+        <f:repeatableHeteroProperty field="labelTemplates" hasHeader="true" addCaption="${%Add Label Template}"
+                                    deleteCaption="${%Delete Label Template}" />
+    </f:entry>
 </j:jelly>

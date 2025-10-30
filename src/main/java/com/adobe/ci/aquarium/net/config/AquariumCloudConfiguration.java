@@ -39,6 +39,7 @@ public class AquariumCloudConfiguration {
     private final String jenkinsUrl;
     private final String additionalMetadata;
     private final String labelFilter;
+    private final java.util.List<AquariumLabelTemplate> labelTemplates;
 
     @DataBoundConstructor
     public AquariumCloudConfiguration(boolean enabled,
@@ -48,7 +49,8 @@ public class AquariumCloudConfiguration {
                                     int agentConnectionWaitMinutes,
                                     String jenkinsUrl,
                                     String additionalMetadata,
-                                    String labelFilter) {
+                                    String labelFilter,
+                                    java.util.List<AquariumLabelTemplate> labelTemplates) {
         this.enabled = enabled;
         this.initAddress = initAddress;
         this.credentialsId = credentialsId;
@@ -57,6 +59,7 @@ public class AquariumCloudConfiguration {
         this.jenkinsUrl = jenkinsUrl;
         this.additionalMetadata = additionalMetadata;
         this.labelFilter = labelFilter;
+        this.labelTemplates = labelTemplates != null ? new java.util.ArrayList<>(labelTemplates) : new java.util.ArrayList<>();
     }
 
     // Getters
@@ -150,6 +153,10 @@ public class AquariumCloudConfiguration {
         return labelFilter;
     }
 
+    public java.util.List<AquariumLabelTemplate> getLabelTemplates() {
+        return new java.util.ArrayList<>(labelTemplates);
+    }
+
     /**
      * Builder pattern for creating configuration instances
      */
@@ -162,6 +169,7 @@ public class AquariumCloudConfiguration {
         private String jenkinsUrl;
         private String additionalMetadata;
         private String labelFilter;
+        private java.util.List<AquariumLabelTemplate> labelTemplates = new java.util.ArrayList<>();
 
         public Builder enabled(boolean enabled) {
             this.enabled = enabled;
@@ -203,11 +211,16 @@ public class AquariumCloudConfiguration {
             return this;
         }
 
+        public Builder labelTemplates(java.util.List<AquariumLabelTemplate> labelTemplates) {
+            this.labelTemplates = labelTemplates != null ? new java.util.ArrayList<>(labelTemplates) : new java.util.ArrayList<>();
+            return this;
+        }
+
         public AquariumCloudConfiguration build() {
             return new AquariumCloudConfiguration(
                 enabled, initAddress, credentialsId,
                 certificateId, agentConnectionWaitMinutes, jenkinsUrl,
-                additionalMetadata, labelFilter
+                additionalMetadata, labelFilter, labelTemplates
             );
         }
     }

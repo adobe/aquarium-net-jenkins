@@ -15,6 +15,7 @@
 package com.adobe.ci.aquarium.net;
 
 import com.adobe.ci.aquarium.net.config.AquariumCloudConfiguration;
+import com.adobe.ci.aquarium.net.config.AquariumLabelTemplate;
 
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
@@ -75,6 +76,7 @@ public class AquariumCloud extends Cloud {
     private String metadata;
     private String labelFilter;
     private List<LabelMapping> labelMappings = new ArrayList<>();
+    private List<AquariumLabelTemplate> labelTemplates = new ArrayList<>();
 
     // A collection of labels supported by the Aquarium Fish cluster
     private transient Map<String, com.adobe.ci.aquarium.net.model.Label> fishLabelsCache = new ConcurrentHashMap<>();
@@ -115,6 +117,7 @@ public class AquariumCloud extends Cloud {
         this.jenkinsUrl = config.getJenkinsUrl();
         this.metadata = config.getAdditionalMetadata();
         this.labelFilter = config.getLabelFilter();
+        this.labelTemplates = config.getLabelTemplates();
         LOG.info("STARTING Aquarium CLOUD with config");
         // In integration tests, avoid background reconnection to keep test isolation
         this.reconnectClient = false;
@@ -221,10 +224,10 @@ public class AquariumCloud extends Cloud {
 
             @Override
             public void onLabelRemoved(String labelUid) {
-                com.adobe.ci.aquarium.net.model.Label removed = fishLabelsCache.remove(labelUid);
-                if (removed != null) {
+                com.adobe.ci.aquarium.net.model.Label label = fishLabelsCache.remove(labelUid);
+                if (label != null) {
                     updateJenkinsLabelsCache();
-                    LOG.log(Level.INFO, "Removed Fish label: " + removed.getName() + ":" + removed.getVersion() + " (" + removed.getUid() + ")");
+                    LOG.log(Level.INFO, "Removed Fish label: " + label.getName() + ":" + label.getVersion() + " (" + label.getUid() + ")");
                 }
             }
         });
@@ -331,6 +334,11 @@ public class AquariumCloud extends Cloud {
     // Used by jelly
     public List<LabelMapping> getLabelMappings() {
         return this.labelMappings;
+    }
+
+    // Used by jelly
+    public List<AquariumLabelTemplate> getLabelTemplates() {
+        return this.labelTemplates;
     }
 
     // Used by AquariumCloudLabelsAction
@@ -541,6 +549,14 @@ public class AquariumCloud extends Cloud {
         this.labelMappings = new ArrayList<>();
         if( labels != null ) {
             this.labelMappings.addAll(labels);
+        }
+    }
+
+    @DataBoundSetter
+    public void setLabelTemplates(@CheckForNull List<AquariumLabelTemplate> templates) {
+        this.labelTemplates = new ArrayList<>();
+        if( templates != null ) {
+            this.labelTemplates.addAll(templates);
         }
     }
 
