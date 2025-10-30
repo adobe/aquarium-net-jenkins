@@ -61,7 +61,7 @@ jobs:
         run: mvn --batch-mode versions:set -DnewVersion="$(git describe --always --tags --match 'v*' | sed 's/^v//')$([ "$(git diff)" = '' ] || echo '-dirty')"
 
       - name: Build with Maven
-        run: mvn --batch-mode --update-snapshots package
+        run: ./build.sh
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
@@ -85,11 +85,6 @@ jobs:
       - name: Find required version of the aquarium-fish client artifact
         id: extract_version
         run: echo "java_version=$(mvn --batch-mode help:evaluate -Dexpression=aquarium-fish-java.version -q -DforceStdout)" >> $GITHUB_OUTPUT
-
-      - name: Download and install release artifact from github
-        run: |
-          curl -sLo aquarium-fish-java-shaded.jar https://github.com/adobe/aquarium-fish/releases/download/v${{ steps.extract_version.outputs.java_version }}/aquarium-fish-java-${{ steps.extract_version.outputs.java_version }}-shaded.jar
-          mvn --batch-mode install:install-file -Dfile=aquarium-fish-java-shaded.jar -DgroupId=com.adobe.ci.aquarium -DartifactId=aquarium-fish-java -Dversion=${{ steps.extract_version.outputs.java_version }} -Dclassifier=shaded -Dpackaging=jar
 
       - name: Download dependencies for integration tests
         run: |
