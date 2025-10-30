@@ -284,6 +284,10 @@ public class AquariumFishTestHelper extends ExternalResource {
                 RoleOuterClass.Permission.newBuilder()
                     .setResource("LabelService").setAction("Get").build()
             )
+            .addPermissions(
+                RoleOuterClass.Permission.newBuilder()
+                    .setResource("LabelService").setAction("Create").build()
+            )
             // User - StreamingService
             .addPermissions(
                 RoleOuterClass.Permission.newBuilder()

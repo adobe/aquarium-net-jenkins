@@ -295,8 +295,7 @@ public class AquariumCreateLabelStepIT {
                 "name: test-${name}-${TIMESTAMP}\n" +
                 "version: 0\n" +
                 "visible_for:\n" +
-                "  - jenkins\n" +
-                "  - jenkins-group\n" +
+                "  - jenkins-user\n" +
                 "remove_at: '${NOW+1*HOUR}'\n" +
                 "definitions:\n" +
                 "  - driver: aws\n" +
@@ -329,7 +328,8 @@ public class AquariumCreateLabelStepIT {
                 "name: simple-test-label\n" +
                 "version: 0\n" +
                 "visible_for:\n" +
-                "  - jenkins\n" +
+                "  - jenkins-user\n" +
+                "remove_at: '${NOW+2*MINUTE}'\n" +
                 "definitions:\n" +
                 "  - driver: local\n" +
                 "    resources:\n" +
@@ -351,7 +351,7 @@ public class AquariumCreateLabelStepIT {
                 "name: timestamp-test-${TIMESTAMP}\n" +
                 "version: 0\n" +
                 "visible_for:\n" +
-                "  - jenkins\n" +
+                "  - jenkins-user\n" +
                 "remove_at: '${NOW+2*HOUR}'\n" +
                 "definitions:\n" +
                 "  - driver: test\n" +

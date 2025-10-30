@@ -35,7 +35,7 @@ import aquarium.v2.Common;
 import java.io.PrintStream;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.HashMap;
@@ -82,47 +82,49 @@ public class AquariumCreateLabelStepExecution extends SynchronousNonBlockingStep
         String templateId = step.getTemplateId();
         Map<String, String> variables = step.getVariablesAsMap();
 
-        try {
-            LOGGER.fine("Starting Aquarium Create Label step with template: " + templateId);
+        LOGGER.fine("Starting Aquarium Create Label step with template: " + templateId);
 
-            // Since it makes sense to execute the step outside the Aquarium worker, we get through the available clouds
-            // to find the right one where the task exists. That should not cause any issues because jenkins is usually
-            // connected to just one Aquarium cluster at a time.
-            List<AquariumCloud> clouds = Jenkins.get().clouds.getAll(AquariumCloud.class);
-            for( AquariumCloud cloud : clouds ) {
-                try {
-                    // Find the template
-                    AquariumLabelTemplate template = findTemplate(cloud, templateId);
-                    if (template == null) {
-                        throw new AbortException("Template not found: " + templateId);
-                    }
+        // Since it makes sense to execute the step outside the Aquarium worker, we get through the available clouds
+        // to find the right one where the task exists. That should not cause any issues because jenkins is usually
+        // connected to just one Aquarium cluster at a time.
+        List<AquariumCloud> clouds = Jenkins.get().clouds.getAll(AquariumCloud.class);
+        Exception lastException = null;
 
-                    // Process the template with variables
-                    String processedTemplate = processTemplate(template.getTemplateContent(), variables);
-                    logger().println("Processed template content: " + processedTemplate);
-
-                    // Parse the YAML template to create Label proto
-                    LabelOuterClass.Label labelProto = parseTemplateToLabel(processedTemplate);
-
-                    // Create the label using the client
-                    String labelUid = cloud.getClient().createLabel(labelProto);
-
-                    logger().println("Created label with UID: " + labelUid);
-                    return labelUid;
-                } catch (Exception e) {
-                    String msg = e.getMessage();
-                    logger().println(msg);
-                    LOGGER.log(Level.INFO, msg, e);
+        for( AquariumCloud cloud : clouds ) {
+            try {
+                // Find the template
+                AquariumLabelTemplate template = findTemplate(cloud, templateId);
+                if (template == null) {
+                    continue; // Try next cloud
                 }
+
+                // Process the template with variables
+                String processedTemplate = processTemplate(template.getTemplateContent(), variables);
+                logger().println("Processed template content: " + processedTemplate);
+
+                // Parse the YAML template to create Label proto
+                LabelOuterClass.Label labelProto = parseTemplateToLabel(processedTemplate);
+
+                // Create the label using the client
+                String labelUid = cloud.getClient().createLabel(labelProto);
+
+                logger().println("Created label with UID: " + labelUid);
+                return labelUid;
+            } catch (Exception e) {
+                lastException = e;
+                String msg = e.getMessage();
+                logger().println(msg);
+                LOGGER.log(Level.INFO, msg, e);
+                // Continue to try next cloud
             }
-        } catch (Exception e) {
-            String msg = "Failed to create Aquarium label: " + e.getMessage();
-            logger().println(msg);
-            LOGGER.log(Level.WARNING, msg, e);
-            throw new AbortException(msg);
         }
 
-        return "";
+        // If we get here, no cloud succeeded
+        if (lastException != null) {
+            throw new AbortException("Failed to create Aquarium label: " + lastException.getMessage());
+        } else {
+            throw new AbortException("Failed to create Aquarium label: Template not found: " + templateId);
+        }
     }
 
     private AquariumLabelTemplate findTemplate(AquariumCloud cloud, String templateId) {
@@ -198,7 +200,7 @@ public class AquariumCreateLabelStepExecution extends SynchronousNonBlockingStep
     }
 
     private Instant calculateTargetTime(LocalDateTime base, int amount, String unit) {
-        Instant baseInstant = base.toInstant(ZoneOffset.UTC);
+        Instant baseInstant = base.atZone(ZoneId.systemDefault()).toInstant();
 
         switch (unit.toUpperCase()) {
             case "SECOND":
