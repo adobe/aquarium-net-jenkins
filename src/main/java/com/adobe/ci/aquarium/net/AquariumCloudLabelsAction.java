@@ -1,17 +1,25 @@
+/**
+ * Copyright 2021-2025 Adobe. All rights reserved.
+ * This file is licensed to you under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License. You may obtain a copy
+ * of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTATIONS
+ * OF ANY KIND, either express or implied. See the License for the specific language
+ * governing permissions and limitations under the License.
+ */
+
 package com.adobe.ci.aquarium.net;
 
-import com.adobe.ci.aquarium.fish.client.ApiException;
-import com.adobe.ci.aquarium.fish.client.model.Label;
-import edu.umd.cs.findbugs.annotations.CheckForNull;
-import edu.umd.cs.findbugs.annotations.NonNull;
+import com.adobe.ci.aquarium.net.model.Label;
 import hudson.Extension;
 import hudson.model.Action;
 import jenkins.model.TransientActionFactory;
-import net.sf.json.JSONArray;
-import org.jetbrains.annotations.Nullable;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 
+import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
@@ -25,44 +33,52 @@ public class AquariumCloudLabelsAction implements Action {
         this.cloud = cloud;
     }
 
+    // Empty constructor for InjectedTest tests only
+    public AquariumCloudLabelsAction() {
+        this.cloud = null;
+    }
+
     // We don't need to display the menu item - just to show summary, so returning null for required methods
-    @CheckForNull
     @Override
     public String getIconFileName() {
         return null;
     }
 
-    @CheckForNull
     @Override
     public String getDisplayName() {
         return null;
     }
 
-    @Nullable
     @Override
     public String getUrlName() {
         return null;
     }
 
-    // Used in summary.jelly
-    public JSONArray getLabelsLatest(){
-        // Using SortedMap for in-place sorting
+    /**
+     * Get all Fish labels from all configured Aquarium clouds
+     */
+    public List<LabelInfo> getLabelsLatest() {
+        cloud.ensureConnected();
         TreeMap<String, Label> latestLabels = new TreeMap<String, Label>();
-        try {
-            // TODO: For now getting all of them, but will need to switch to latest ones, when API will be here
-            List<Label> labels = cloud.getClient().labelGet();
 
-            // Filtering to keep only the latest ones
-            for( Label label : labels ) {
-                Label latestLabel = latestLabels.get(label.getName());
-                if( latestLabel == null || latestLabel.getVersion() < label.getVersion() ) {
-                    latestLabels.put(label.getName(), label);
-                }
+        // Get labels from the cloud's cache
+        List<Label> fishLabels = new ArrayList<Label>(cloud.getFishLabelsCache().values());
+
+        // Filtering to keep only the latest ones
+        for( Label label : fishLabels ) {
+            Label latestLabel = latestLabels.get(label.getName());
+            if( latestLabel == null || latestLabel.getVersion() < label.getVersion() ) {
+                latestLabels.put(label.getName(), label);
             }
-        } catch (ApiException e) {
-            throw new RuntimeException(e);
         }
-        return JSONArray.fromObject(latestLabels.values());
+
+        // Prepare the JSON array
+        List<LabelInfo> out = new ArrayList<LabelInfo>();
+        for( Label label : latestLabels.values() ) {
+            out.add(new LabelInfo(label.getName(), label.getVersion(), label.getCreatedAt().toString(), label.getYamlDescription()));
+        }
+
+        return out;
     }
 
     @Extension
@@ -72,10 +88,33 @@ public class AquariumCloudLabelsAction implements Action {
             return AquariumCloud.class;
         }
 
-        @NonNull
+        @Nonnull
         @Override
-        public Collection<? extends Action> createFor(@NonNull AquariumCloud cloud) {
+        public Collection<? extends Action> createFor(@Nonnull AquariumCloud cloud) {
             return Collections.singletonList(new AquariumCloudLabelsAction(cloud));
         }
     }
+
+    /**
+     * Data class for label information
+     */
+    public static class LabelInfo {
+        public final String name;
+        public final int version;
+        public final String createdAt;
+        public final String yamlDescription;
+
+        public LabelInfo(String name, int version, String createdAt, String yamlDescription) {
+            this.name = name;
+            this.version = version;
+            this.createdAt = createdAt;
+            this.yamlDescription = yamlDescription;
+        }
+
+        public String getName() { return name; }
+        public int getVersion() { return version; }
+        public String getCreatedAt() { return createdAt; }
+        public String getYamlDescription() { return yamlDescription; }
+        public String getFullName() { return name + ":" + version; }
+     }
 }

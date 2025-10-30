@@ -6,7 +6,11 @@
         <f:textbox/>
     </f:entry>
 
-    <f:entry title="${%Aquarium Fish init host}" field="initHostUrl">
+    <f:entry title="${%Enabled}" field="enabled">
+        <f:checkbox default="true"/>
+    </f:entry>
+
+    <f:entry title="${%Aquarium Fish init address}" field="initAddressUrl">
         <f:textbox/>
     </f:entry>
 
@@ -14,7 +18,7 @@
         <c:select/>
     </f:entry>
 
-    <f:entry title="${%CA Certificate Credentials}" field="caCredentialsId">
+    <f:entry title="${%CA Certificate Credentials}" field="certificateId">
         <c:select/>
     </f:entry>
 
@@ -23,7 +27,7 @@
     </f:entry>
 
     <f:validateButton title="${%Test Connection}" progress="${%Testing...}"
-                      method="testConnection" with="name,initHostUrl,credentialsId,caCredentialsId"/>
+                      method="testConnection" with="name,initAddressUrl,credentialsId,certificateId"/>
 
     <f:entry title="${%Jenkins URL}" field="jenkinsUrl">
         <f:textbox />
@@ -31,6 +35,10 @@
 
     <f:entry title="${%Additional Metadata}" field="metadata">
         <f:textarea/>
+    </f:entry>
+
+    <f:entry title="${%Label Filter}" field="labelFilter">
+        <f:textbox/>
     </f:entry>
 
     <f:entry title="${%Label Mappings}" field="labelMappings">

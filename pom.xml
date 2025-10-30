@@ -5,13 +5,13 @@
     <parent>
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>plugin</artifactId>
-        <version>4.10</version>
+        <version>4.40</version>
         <relativePath />
     </parent>
 
     <groupId>com.adobe.ci.aquarium</groupId>
     <artifactId>aquarium-net-jenkins</artifactId>
-    <version>dev-SNAPSHOT</version><!-- Replaced during release from git tag -->
+    <version>0.6.0</version><!-- Replaced during release from git tag -->
     <packaging>hpi</packaging>
     <name>Aquarium Net Jenkins Plugin</name>
     <description>Dynamically allocates required resources from Aquarium Fish cluster nodes</description>
@@ -31,14 +31,12 @@
         </repository>
     </repositories>
 
-    <profiles>
-        <profile>
-            <id>Local</id>
-            <properties>
-                <aquarium-fish.openapi.spec.path>${project.basedir}/../aquarium-fish/docs/openapi.yaml</aquarium-fish.openapi.spec.path>
-            </properties>
-        </profile>
-    </profiles>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>repo.jenkins-ci.org</id>
+            <url>https://repo.jenkins-ci.org/public/</url>
+        </pluginRepository>
+    </pluginRepositories>
 
     <properties>
         <jenkins.version>2.222.4</jenkins.version>
@@ -46,12 +44,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <guice.version>3.0</guice.version>
         <ivy.plugin.version>1.19</ivy.plugin.version>
-
-        <!-- TODO
-            Eventually, want to make this dynamic so it pulls a selectable yaml file to generate from, generated from aquarium-fish server project.
-            Need to define that flow, whether use git or put yaml in jar files, etc. TBD.
-        -->
-        <aquarium-fish.openapi.spec.path>https://raw.githubusercontent.com/adobe/aquarium-fish/main/docs/openapi.yaml</aquarium-fish.openapi.spec.path>
 
         <workflow-durable-task-step-version>2.35</workflow-durable-task-step-version>
         <workflow-basic-steps-version>2.21</workflow-basic-steps-version>
@@ -62,7 +54,38 @@
         <gson-version>2.8.6</gson-version>
         <gson-fire-version>1.8.5</gson-fire-version>
         <threetenbp-version>1.5.0</threetenbp-version>
+
+        <animal.sniffer.version>1.24</animal.sniffer.version>
+
+        <!-- For proper logging during the tests execution -->
+        <maven.test.redirectTestOutputToFile>false</maven.test.redirectTestOutputToFile>
+
+        <!-- Aquarium-Fish pregenerated proto -->
+        <aquarium-fish-java.version>0.10.1</aquarium-fish-java.version>
     </properties>
+
+    <profiles>
+        <!-- Special profile to run integration tests, which requires aquarium-fish binary + docker image setup -->
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <version>3.5.3</version>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <dependencies>
         <dependency>
@@ -92,47 +115,42 @@
             <version>${workflow-durable-task-step-version}</version>
         </dependency>
 
-        <!-- OpenAPI deps -->
+        <!-- Aquarium-Fish Proto Library, using shaded version to run on older jenkins pipeline plugins with guava < 31 -->
         <dependency>
-            <groupId>io.swagger</groupId>
-            <artifactId>swagger-annotations</artifactId>
-            <version>${swagger-core-version}</version>
+            <groupId>com.adobe.ci.aquarium</groupId>
+            <artifactId>aquarium-fish-java</artifactId>
+            <classifier>shaded</classifier>
+            <version>${aquarium-fish-java.version}</version>
+        </dependency>
+        <!-- Required by dependency parent pom 4.40 -->
+        <dependency>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+            <version>1.4.7</version>
+        </dependency>
+
+        <!-- Yaml formatting library -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.4</version>
+        </dependency>
+
+        <!-- Pipeline engine for tests -->
+        <dependency>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-cps</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.openapitools</groupId>
-            <artifactId>jackson-databind-nullable</artifactId>
-            <version>0.2.4</version>
-        </dependency>
-        <!-- Okio versions separate from okhttp and we want to pull in later versions -->
-        <dependency>
-            <groupId>com.squareup.okio</groupId>
-            <artifactId>okio</artifactId>
-            <version>${okio-version}</version>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-job</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
-            <version>${okhttp-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>logging-interceptor</artifactId>
-            <version>${okhttp-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>${gson-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.gsonfire</groupId>
-            <artifactId>gson-fire</artifactId>
-            <version>${gson-fire-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.threeten</groupId>
-            <artifactId>threetenbp</artifactId>
-            <version>${threetenbp-version}</version>
+            <groupId>org.jenkinsci.plugins</groupId>
+            <artifactId>pipeline-model-definition</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -148,49 +166,12 @@
         </dependencies>
     </dependencyManagement>
 
-    <pluginRepositories>
-        <pluginRepository>
-            <id>repo.jenkins-ci.org</id>
-            <url>https://repo.jenkins-ci.org/public/</url>
-        </pluginRepository>
-    </pluginRepositories>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.openapitools</groupId>
-                <artifactId>openapi-generator-maven-plugin</artifactId>
-                <version>7.7.0</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>generate</goal>
-                        </goals>
-                        <configuration>
-                            <inputSpec>${aquarium-fish.openapi.spec.path}</inputSpec>
-                            <generatorName>java</generatorName>
-
-                            <generateApiTests>false</generateApiTests>
-                            <generateModelTests>false</generateModelTests>
-
-                            <invokerPackage>com.adobe.ci.aquarium.fish.client</invokerPackage>
-                            <apiPackage>com.adobe.ci.aquarium.fish.client.api</apiPackage>
-                            <modelPackage>com.adobe.ci.aquarium.fish.client.model</modelPackage>
-
-                            <httpUserAgent>${project.artifactId}/${project.version}/java</httpUserAgent>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
-
     <reporting>
         <plugins>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>findbugs-maven-plugin</artifactId>
-                <version>2.4.1</version>
+                <version>3.0.5</version>
                 <configuration>
                      <xmlOutput>true</xmlOutput>
                      <!-- Optional directory to put findbugs xdoc xml report -->

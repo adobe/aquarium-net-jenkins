@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2021-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -10,9 +10,11 @@
  * governing permissions and limitations under the License.
  */
 
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net.pipeline;
 
-import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
+import aquarium.v2.ApplicationOuterClass.ApplicationState.Status;
 import hudson.Extension;
 import hudson.model.Node;
 import hudson.util.ListBoxModel;
@@ -20,7 +22,7 @@ import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -52,7 +54,7 @@ public class AquariumCreateSnapshotStep extends Step implements Serializable {
             // Back to default
             this.when = null;
         } else {
-            this.when = ApplicationStatus.fromValue(status).toString();
+            this.when = status;
         }
     }
 
@@ -65,7 +67,7 @@ public class AquariumCreateSnapshotStep extends Step implements Serializable {
 
     public String getWhen() {
         if( this.when == null ) {
-            return ApplicationStatus.ALLOCATED.toString();
+            return Status.ALLOCATED.name();
         }
         return this.when;
     }
@@ -83,7 +85,7 @@ public class AquariumCreateSnapshotStep extends Step implements Serializable {
             return "aquariumCreateSnapshot";
         }
 
-        @NotNull
+        @Nonnull
         @Override
         public String getDisplayName() {
             return "Make snapshot of the current worker";
@@ -102,8 +104,8 @@ public class AquariumCreateSnapshotStep extends Step implements Serializable {
         // Used to fill the pipeline step snippet generator `when` field
         public ListBoxModel doFillWhenItems() {
             ListBoxModel items = new ListBoxModel();
-            items.add(ApplicationStatus.ALLOCATED.name());
-            items.add(ApplicationStatus.DEALLOCATE.name());
+            items.add(Status.ALLOCATED.name());
+            items.add(Status.DEALLOCATED.name());
             return items;
         }
     }

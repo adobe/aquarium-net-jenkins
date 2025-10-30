@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2021-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -10,11 +10,10 @@
  * governing permissions and limitations under the License.
  */
 
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net;
 
-import com.adobe.ci.aquarium.fish.client.ApiException;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationState;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -31,10 +30,9 @@ import jenkins.security.MasterToSlaveCallable;
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -55,7 +53,6 @@ public class AquariumSlave extends AbstractCloudSlave {
     private static final String DEFAULT_AGENT_PREFIX = "fish";
 
     private final String cloudName;
-    private transient Set<Queue.Executable> executables = new HashSet<>();
 
     private UUID application_uid;
 
@@ -129,6 +126,66 @@ public class AquariumSlave extends AbstractCloudSlave {
     synchronized protected void _terminate(TaskListener listener) throws IOException, InterruptedException {
         LOG.log(Level.INFO, "Terminating Aquarium resource for agent {0}", this.name);
 
+        Computer computer = toComputer();
+        if (computer == null) {
+            String msg = String.format("Computer for agent is null: %s", this.name);
+            LOG.log(Level.SEVERE, msg);
+            listener.fatalError(msg);
+            // Still try to cleanup cloud resources even if computer is null
+            if (getCloudName() != null) {
+                try {
+                    AquariumCloud cloud = getAquariumCloud();
+                    cloud.onTerminate(this);
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "Error cleaning up cloud resources for agent " + this.name, e);
+                }
+            }
+            return;
+        }
+
+        // Mark the computer as intentionally disconnecting so channel listeners do not abort pipelines
+        if (computer instanceof AquariumComputer) {
+            ((AquariumComputer) computer).markIntentionalDisconnect();
+        }
+
+        // CRITICAL: Tell the slave to stop JNLP reconnects BEFORE disconnecting
+        // The channel needs to be open to send this command
+        VirtualChannel ch = computer.getChannel();
+        if (ch != null) {
+            try {
+                Future<Void> disconnectorFuture = ch.callAsync(new SlaveDisconnector());
+                disconnectorFuture.get(DISCONNECTION_TIMEOUT, TimeUnit.SECONDS);
+                LOG.log(Level.FINE, "Successfully sent disconnect order to agent " + this.name);
+            } catch (InterruptedException e) {
+                // Restore interrupt status and continue with termination
+                Thread.currentThread().interrupt();
+                LOG.log(Level.FINE, "Interrupted during agent termination for " + this.name);
+            } catch (ExecutionException | TimeoutException e) {
+                String msg = String.format("Ignoring error sending order to not reconnect agent %s: %s", this.name, e.getMessage());
+                LOG.log(Level.INFO, msg, e);
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Unexpected error sending disconnect order to agent " + this.name, e);
+            }
+        }
+
+        // Now disconnect the computer (closes the channel)
+        // Any in-flight requests will be cancelled, which is acceptable since the agent is terminating
+        if( !(computer.getOfflineCause() instanceof AquariumOfflineCause) ) {
+            computer.disconnect(new AquariumOfflineCause());
+            LOG.log(Level.INFO, "Disconnected computer for node '" + name + "'.");
+        }
+
+        if (getCloudName() == null) {
+            String msg = String.format("Cloud name is not set for agent, can't terminate: %s", this.name);
+            LOG.log(Level.SEVERE, msg);
+            listener.fatalError(msg);
+            return;
+        }
+
+        // Application deallocation is now handled by AquariumCloud.onTerminate() via streaming
+        // No need for blocking loops here - the cloud handles cleanup asynchronously
+        LOG.log(Level.INFO, "Agent termination delegated to cloud for proper application cleanup");
+
         AquariumCloud cloud;
         try {
             cloud = getAquariumCloud();
@@ -140,71 +197,6 @@ public class AquariumSlave extends AbstractCloudSlave {
             return;
         }
         cloud.onTerminate(this);
-
-        Computer computer = toComputer();
-        if (computer == null) {
-            String msg = String.format("Computer for agent is null: %s", this.name);
-            LOG.log(Level.SEVERE, msg);
-            listener.fatalError(msg);
-            return;
-        }
-        if( !(computer.getOfflineCause() instanceof AquariumOfflineCause) ) {
-            computer.disconnect(new AquariumOfflineCause());
-            LOG.log(Level.INFO, "Disconnected computer for node '" + name + "'.");
-        }
-
-        // Tell the slave to stop JNLP reconnects.
-        VirtualChannel ch = computer.getChannel();
-        if (ch != null) {
-            Future<Void> disconnectorFuture = ch.callAsync(new SlaveDisconnector());
-            try {
-                disconnectorFuture.get(DISCONNECTION_TIMEOUT, TimeUnit.SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                String msg = String.format("Ignoring error sending order to not reconnect agent %s: %s", this.name, e.getMessage());
-                LOG.log(Level.INFO, msg, e);
-            }
-        }
-
-        if (getCloudName() == null) {
-            String msg = String.format("Cloud name is not set for agent, can't terminate: %s", this.name);
-            LOG.log(Level.SEVERE, msg);
-            listener.fatalError(msg);
-            return;
-        }
-
-        // Need to make sure the resource will be deallocated even if there will be some issues with network
-        while( true ) {
-            try {
-                if( this.application_uid != null ) {
-                    ApplicationState state = cloud.getClient().applicationStateGet(this.application_uid);
-                    if (state.getStatus() != ApplicationStatus.ALLOCATED
-                            && state.getStatus() != ApplicationStatus.ELECTED
-                            && state.getStatus() != ApplicationStatus.NEW) {
-                        LOG.log(Level.SEVERE, "The Application is not active: " + state.getStatus());
-                        break;
-                    }
-                    cloud.getClient().applicationDeallocate(this.application_uid);
-                }
-                break;
-            } catch( ApiException e ) {
-                if( e.getCode() == 404 ) {
-                    String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s.",
-                            getCloudName(), this.name, this.application_uid, e.getMessage());
-                    LOG.log(Level.SEVERE, msg);
-                    break;
-                }
-                String msg = String.format("Failed to remove resource from %s for agent %s Application %s: %s." +
-                        " Repeating...", getCloudName(), this.name, this.application_uid, e.getMessage());
-                LOG.log(Level.SEVERE, msg);
-            } catch( Exception e ) {
-                String msg = String.format("Error during remove resource from %s for agent %s Application %s: %s.",
-                        getCloudName(), this.name, this.application_uid, e);
-                e.printStackTrace(listener.fatalError(msg));
-                LOG.log(Level.SEVERE, msg);
-                break;
-            }
-            Thread.sleep(5000);
-        }
 
         String msg = String.format("Disconnected computer %s", name);
         LOG.log(Level.INFO, msg);
@@ -235,16 +227,11 @@ public class AquariumSlave extends AbstractCloudSlave {
         return new AquariumComputer(this);
     }
 
-    @NotNull
+    @Nonnull
     @Override
     public Launcher createLauncher(TaskListener listener) {
         Launcher launcher = super.createLauncher(listener);
         return launcher;
-    }
-
-    protected Object readResolve() {
-        this.executables = new HashSet<>();
-        return this;
     }
 
     /**
@@ -312,6 +299,7 @@ public class AquariumSlave extends AbstractCloudSlave {
     public static final class DescriptorImpl extends SlaveDescriptor {
 
         @Override
+        @Nonnull
         public String getDisplayName() {
             return "Aquarium Agent";
         }

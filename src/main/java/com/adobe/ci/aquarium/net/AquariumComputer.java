@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2021-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -10,19 +10,20 @@
  * governing permissions and limitations under the License.
  */
 
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net;
 
 import hudson.model.Computer;
 import hudson.model.Executor;
 import hudson.model.Queue;
-import hudson.model.queue.SubTask;
+import hudson.model.TaskListener;
 import hudson.security.ACL;
 import hudson.security.Permission;
 import hudson.slaves.AbstractCloudComputer;
 import net.sf.json.JSONObject;
 import org.acegisecurity.Authentication;
-import org.jenkinsci.plugins.workflow.support.steps.ExecutorStepExecution.PlaceholderTask;
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import java.io.PrintStream;
 import java.util.logging.Level;
@@ -35,6 +36,9 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
 
     private JSONObject appInfo;
     private JSONObject definitionInfo;
+
+    // Set to true when this computer is being intentionally terminated by the plugin
+    private volatile boolean intentionalDisconnect;
 
     public AquariumComputer(AquariumSlave slave) {
         super(slave);
@@ -55,30 +59,36 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
         this.definitionInfo = info;
     }
 
+    /**
+     * Mark that this computer is about to disconnect intentionally
+     */
+    public void markIntentionalDisconnect() {
+        this.intentionalDisconnect = true;
+    }
+
+    /**
+     * Returns true if this computer was intentionally disconnected by the plugin
+     */
+    public boolean wasIntentionalDisconnect() {
+        return this.intentionalDisconnect;
+    }
+
     @Override
     public void taskAccepted(Executor executor, Queue.Task task) {
         super.taskAccepted(executor, task);
         Queue.Executable exec = executor.getCurrentExecutable();
         LOG.log(Level.INFO, "Computer {0} accepted task {1}", new Object[] {this, exec});
 
-        // Tell the current workflow about the node we're executing on
-        // Not that great solution - will be better to use the node step listener somehow, but I did not found a way to do that
-        try {
-            SubTask parent = exec.getParent();
-            if( parent instanceof PlaceholderTask ) {
-                PlaceholderTask wf_run = (PlaceholderTask) parent;
-                PrintStream logger = wf_run.getNode().getExecution().getOwner().getListener().getLogger();
-                if( !this.appInfo.isEmpty() ) {
-                    logger.println("Aquarium Application: " + this.appInfo);
-                }
-                if( !this.definitionInfo.isEmpty() ) {
-                    logger.println("Aquarium Definition: " + this.definitionInfo);
-                }
-            } else {
-                LOG.log(Level.WARNING, "Incorrect definition or executor to notify: Aquarium LabelDefinition: " + this.definitionInfo);
+        // Best-effort: write info to the computer listener (visible in node/agent log)
+        TaskListener tl = getListener();
+        if (tl != null) {
+            PrintStream logger = tl.getLogger();
+            if (this.appInfo != null && !this.appInfo.isEmpty()) {
+                logger.println("Aquarium Application: " + this.appInfo);
             }
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Unable to notify task about node resource: Aquarium LabelDefinition: " + this.definitionInfo);
+            if (this.definitionInfo != null && !this.definitionInfo.isEmpty()) {
+                logger.println("Aquarium Definition: " + this.definitionInfo);
+            }
         }
     }
 
@@ -95,6 +105,8 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
     private void done() {
         // Terminate the node
         try {
+            // Signal intentional disconnect before triggering termination so listeners can skip abort
+            this.markIntentionalDisconnect();
             AquariumSlave node = getNode();
             if( node == null ) {
                 LOG.log(Level.WARNING, "Unable to terminate null node: " + getNode());
@@ -121,13 +133,13 @@ public class AquariumComputer extends AbstractCloudComputer<AquariumSlave> {
         return String.format("AquariumComputer name: %s slave: %s (%s)", getName(), getNode(), this.getAppInfo());
     }
 
-    @NotNull
+    @Nonnull
     @Override
     public ACL getACL() {
         final ACL base = super.getACL();
         return new ACL() {
             @Override
-            public boolean hasPermission(@NotNull Authentication a, @NotNull Permission permission) {
+            public boolean hasPermission(@Nonnull Authentication a, @Nonnull Permission permission) {
                 return permission == Computer.CONFIGURE ? false : base.hasPermission(a,permission);
             }
         };

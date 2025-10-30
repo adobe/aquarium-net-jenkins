@@ -1,5 +1,5 @@
 /**
- * Copyright 2024 Adobe. All rights reserved.
+ * Copyright 2024-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -10,11 +10,13 @@
  * governing permissions and limitations under the License.
  */
 
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net.pipeline;
 
-import com.adobe.ci.aquarium.fish.client.ApiException;
-import com.adobe.ci.aquarium.fish.client.model.ApplicationTask;
+import aquarium.v2.ApplicationOuterClass.ApplicationTask;
 import com.adobe.ci.aquarium.net.AquariumCloud;
+import com.adobe.ci.aquarium.net.util.ProtobufJsonUtil;
 import hudson.model.TaskListener;
 import hudson.util.LogTaskListener;
 import jenkins.model.Jenkins;
@@ -71,24 +73,26 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
                 try {
                     while( true ) {
                         ApplicationTask task = cloud.getClient().taskGet(task_uid);
-                        out = JSONObject.fromObject(task);
-                        JSONObject result = JSONObject.fromObject(task.getResult());
-                        if( !result.isEmpty() || !wait) {
-                            // No need to wait or we have the result - so returning the task
+                        // Convert protobuf to JSONObject for output
+                        if( !task.getResult().toString().isEmpty() || !wait) {
+                            // Yes, in theory we need to use protobuf utils to convert to JSON, but too much hassle with deps
+                            out = ProtobufJsonUtil.toJson(task);
                             return out;
                         }
                         Thread.sleep(10000);
                     }
-                } catch (ApiException e) {
+                } catch (InterruptedException ie) {
+                    String msg = "Interrupted while requesting ApplicationTask";
+                    logger().println(msg);
+                    LOGGER.log(Level.FINE, msg);
+                    Thread.currentThread().interrupt();
+                    return out;
+                } catch (Exception e) {
                     String msg = "ApplicationTask was not found on AquariumCluster " + cloud.getName();
                     logger().println(msg);
                     LOGGER.log(Level.INFO, msg, e);
                 }
             }
-        } catch (InterruptedException e) {
-            String msg = "Interrupted while requesting ApplicationTask";
-            logger().println(msg);
-            LOGGER.log(Level.FINE, msg);
         } catch (Exception e) {
             String msg = "Failed to request ApplicationTask";
             logger().println(msg);
@@ -102,4 +106,6 @@ public class AquariumApplicationTaskStepExecution extends SynchronousNonBlocking
         LOGGER.log(Level.FINE, "Stopping Aquarium ApplicationTask step.");
         super.stop(cause);
     }
+
+
 }

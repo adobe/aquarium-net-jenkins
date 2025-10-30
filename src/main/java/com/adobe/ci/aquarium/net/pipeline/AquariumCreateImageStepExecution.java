@@ -1,5 +1,5 @@
 /**
- * Copyright 2024 Adobe. All rights reserved.
+ * Copyright 2024-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -10,9 +10,11 @@
  * governing permissions and limitations under the License.
  */
 
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net.pipeline;
 
-import com.adobe.ci.aquarium.fish.client.model.ApplicationStatus;
+import aquarium.v2.ApplicationOuterClass.ApplicationState.Status;
 import com.adobe.ci.aquarium.net.AquariumCloud;
 import hudson.model.TaskListener;
 import hudson.util.LogTaskListener;
@@ -56,10 +58,10 @@ public class AquariumCreateImageStepExecution extends SynchronousNonBlockingStep
     @Override
     protected String run() throws Exception {
         boolean full = step.isFull();
-        ApplicationStatus when = ApplicationStatus.fromValue(step.getWhen());
+        Status when = Status.valueOf(step.getWhen());
 
         try {
-            LOGGER.log(Level.FINE, "Starting Aquarium Create Image step.");
+            LOGGER.fine("Starting Aquarium Create Image step.");
 
             Node node = getContext().get(Node.class);
             if( !(node instanceof AquariumSlave) ) {
@@ -70,9 +72,9 @@ public class AquariumCreateImageStepExecution extends SynchronousNonBlockingStep
             UUID app_id = ((AquariumSlave)node).getApplicationUID();
             AquariumCloud cloud = ((AquariumSlave)node).getAquariumCloud();
 
-            UUID task_uid = cloud.getClient().applicationTaskImage(app_id, when, full);
+            String taskUidString = cloud.getClient().applicationTaskImage(app_id, when, full);
 
-            return task_uid.toString();
+            return taskUidString;
         } catch (InterruptedException e) {
             String msg = "Interrupted while requesting create image of the Application";
             logger().println(msg);

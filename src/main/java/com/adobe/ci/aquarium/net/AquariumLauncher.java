@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2021-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -10,12 +10,10 @@
  * governing permissions and limitations under the License.
  */
 
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net;
 
-import com.adobe.ci.aquarium.fish.client.ApiException;
-import com.adobe.ci.aquarium.fish.client.model.*;
-import com.google.common.base.Throwables;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.model.TaskListener;
 import hudson.slaves.JNLPLauncher;
 import hudson.slaves.SlaveComputer;
@@ -25,6 +23,7 @@ import org.kohsuke.stapler.DataBoundConstructor;
 
 import javax.annotation.CheckForNull;
 import java.io.IOException;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -48,8 +47,7 @@ public class AquariumLauncher extends JNLPLauncher {
     }
 
     @Override
-    @SuppressFBWarnings(value = "SWL_SLEEP_WITH_LOCK_HELD", justification = "This is fine")
-    public synchronized void launch(SlaveComputer computer, TaskListener listener) {
+    public void launch(SlaveComputer computer, TaskListener listener) {
         if (!(computer instanceof AquariumComputer)) {
             throw new IllegalArgumentException("This Launcher can be used only with AquariumComputer");
         }
@@ -63,163 +61,95 @@ public class AquariumLauncher extends JNLPLauncher {
         LOG.log(Level.INFO, "Launch node " + comp.getName());
 
         String nodeFirstLabel = node.getLabelString().split(" ")[0];
+
         try {
-            // Request for resource
             AquariumCloud cloud = node.getAquariumCloud();
-            AquariumClient client = cloud.getClient();
+            cloud.startApplicationCreation(node, nodeFirstLabel);
 
-            SlaveComputer slaveComputer;
-            Label label = null;
-            Application app;
-            ApplicationState state = null;
+            listener.getLogger().println("Starting Aquarium agent launch process...");
 
-            // Checking if label contains version
-            int colonPos = nodeFirstLabel.indexOf(':');
-            if (colonPos > 0) {
-                // Label name contains version, so getting the required label version
+            // In the new architecture, application creation and monitoring happens in AquariumCloud
+            // The launcher just waits for the application to be allocated and sets up the agent
 
-                String labelName = nodeFirstLabel.substring(0, colonPos);
-                Integer labelVersion = Integer.parseInt(nodeFirstLabel.substring(colonPos + 1));
-                label = client.labelVersionFind(labelName, labelVersion);
-            } else {
-                // No version in the label, so using latest one
-                label = client.labelFindLatest(nodeFirstLabel);
-            }
-            if (label == null) {
-                throw new IllegalStateException("Label was not found in Aquarium: " + nodeFirstLabel);
-            }
-
-            // If jenkins master restarted with already launched node - we should not create a new Application and just
-            // to wait when the agent will connect back or if it will not connect - terminate the node.
-            if( !this.launched ) {
-
-                // Since the Application was not requested - requesting a new one
-                if( node.getApplicationUID() == null ) {
-                    app = client.applicationCreate(
-                            label.getUID(),
-                            cloud.getJenkinsUrl(),
-                            node.getNodeName(),
-                            comp.getJnlpMac(),
-                            cloud.getMetadata()
-                    );
-
-                    node.setApplicationUID(app.getUID());
-                    listener.getLogger().println("Aquarium Application was requested: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
-                } else {
-                    app = client.applicationGet(node.getApplicationUID());
-                    listener.getLogger().println("Aquarium Application already exist: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
-                }
-                // Notify computer log that the request for Application was sent
+            if (!this.launched) {
+                // Set up basic application info for display
                 JSONObject app_info = new JSONObject();
-                app_info.put("ApplicationUID", app.getUID().toString());
-                app_info.put("LabelName", label.getName());
-                app_info.put("LabelVersion", label.getVersion());
-                comp.setAppInfo(app_info);
+                UUID applicationUID = node.getApplicationUID();
+                if (applicationUID != null) {
+                    app_info.put("ApplicationUID", applicationUID.toString());
+                    app_info.put("Status", "Provisioning");
+                    comp.setAppInfo(app_info);
+                    listener.getLogger().println("Aquarium Application UID: " + applicationUID);
+                }
 
-                // Wait for fish node election process - it could take a while if there is not enough resources in the pool
-                int wait_in_elected = 60; // 60 * 5 - status_call_time >= 5 mins
-                while (true) {
-                    slaveComputer = node.getComputer();
+                // Wait for agent connection with configured timeout
+                int maxWaitMinutes = cloud.getAgentConnectWaitMin();
+                int maxWaitSeconds = maxWaitMinutes * 60;
+                int waitedSeconds = 0;
+
+                listener.getLogger().println("Waiting for agent connection (timeout: " + maxWaitMinutes + " minutes)...");
+
+                while (waitedSeconds < maxWaitSeconds) {
+                    SlaveComputer slaveComputer = node.getComputer();
                     if (slaveComputer == null) {
-                        throw new IllegalStateException("Node was deleted, computer is null");
+                        throw new IllegalStateException("Node was deleted during launch");
                     }
+
                     if (slaveComputer.isOnline()) {
+                        listener.getLogger().println("Agent connected successfully!");
                         break;
                     }
 
-                    // Check that the resource hasn't failed already
+                    // Sleep without holding the computer monitor to avoid SWL_SLEEP_WITH_LOCK_HELD
                     try {
-                        state = client.applicationStateGet(app.getUID());
-                        if (state.getStatus() == ApplicationStatus.ALLOCATED) {
-                            break;
-                        } else if (state.getStatus() == ApplicationStatus.ELECTED) {
-                            // Application should not be in elected state for too long
-                            wait_in_elected--;
-                            if (wait_in_elected < 0) {
-                                // Wait for elected failed
-                                LOG.log(Level.WARNING, "Application stuck in ELECTED state for too long:" + state.getDescription() + ", node:" + comp.getName());
-                                break;
-                            }
-                        } else if (state.getStatus() != ApplicationStatus.ELECTED && state.getStatus() != ApplicationStatus.NEW) {
-                            // Resource launch failed
-                            LOG.log(Level.WARNING, "Unable to get resource from pool:" + state.getDescription() + ", node:" + comp.getName());
-                            break;
-                        }
-                    } catch (ApiException e) {
-                        LOG.log(Level.WARNING, "Error happened during API request:" + e + ", node:" + comp.getName());
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Interrupted while waiting for agent connection", ie);
                     }
+                    waitedSeconds += 5;
 
-                    Thread.sleep(5000);
-                }
-            } else {
-                listener.getLogger().println("Aquarium Application Resource agent reconnecting...");
-                app = client.applicationGet(node.getApplicationUID());
-            }
-
-            // Print to the computer log about the LabelDefinition was chosen
-            Resource res = client.applicationResourceGet(app.getUID());
-            listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
-            // Tell computer to know where it runs
-            comp.setDefinitionInfo(JSONObject.fromObject(label.getDefinitions().get(res.getDefinitionIndex())));
-
-            // Wait for agent connection for 10 minutes
-            int wait_agent_connect = cloud.getAgentConnectWaitMin() * 60 / 5; // 120 * 5 - status_call_time >= 10 mins
-            for( int waited_for_agent = 0; waited_for_agent < wait_agent_connect; waited_for_agent++ ) {
-                slaveComputer = node.getComputer();
-                if( slaveComputer == null ) {
-                    throw new IllegalStateException("Node was deleted, computer is null");
-                }
-                if( slaveComputer.isOnline() ) {
-                    break;
+                    // Log progress every minute
+                    if (waitedSeconds % 60 == 0) {
+                        int minutesWaited = waitedSeconds / 60;
+                        listener.getLogger().println("Still waiting for agent connection... (" + minutesWaited + "/" + maxWaitMinutes + " minutes)");
+                    }
                 }
 
-                // Check that the resource hasn't failed already
+                // Check final connection status
+                SlaveComputer finalComputer = node.getComputer();
+                if (finalComputer == null || finalComputer.isOffline()) {
+                    listener.getLogger().println("Agent failed to connect within timeout, terminating...");
+                    throw new IllegalStateException("Agent connection timeout exceeded");
+                }
+
+                // Set up the retention strategy for one-time use
+                node.setRetentionStrategy(new OnceRetentionStrategy(5));
+                listener.getLogger().println("Agent configured for one-time use");
+
+                // Add channel listener for interruption handling
+                if (computer.getChannel() != null) {
+                    computer.getChannel().addListener(new AquariumChannelListener(comp));
+                    listener.getLogger().println("Channel listener configured");
+                } else {
+                    LOG.log(Level.WARNING, "Unable to set channel listener - channel is null");
+                }
+
+                // Enable task acceptance
+                computer.setAcceptingTasks(true);
+                this.launched = true;
+
+                // Persist the launched state
                 try {
-                    state = client.applicationStateGet(node.getApplicationUID());
-                    if( state.getStatus() != ApplicationStatus.ALLOCATED ) {
-                        LOG.log(Level.WARNING, "Agent did not connected:" + state.getDescription() + ", node:" + comp.getName());
-                        break;
-                    }
-                } catch( ApiException e ) {
-                    LOG.log(Level.WARNING, "Error happened during API request:" + e + ", node:" + comp.getName());
+                    node.save();
+                } catch (IOException e) {
+                    LOG.log(Level.WARNING, "Could not save agent state: " + e.getMessage(), e);
                 }
 
-                Thread.sleep(5000);
-            }
+                listener.getLogger().println("Aquarium agent launch completed successfully!");
 
-            slaveComputer = node.getComputer();
-            if( slaveComputer == null ) {
-                throw new IllegalStateException("Node was deleted, computer is null");
-            }
-            if( slaveComputer.isOffline() ) {
-                if( node != null ) {
-                    // Clean up
-                    node.terminate();
-                }
-                throw new IllegalStateException("Agent is not connected, status:" + state);
-            }
-
-            // Set up the retention strategy to destroy the node when it's completed processes, idle will initiate the
-            // agent termination if no workload was assigned to it.
-            node.setRetentionStrategy(new OnceRetentionStrategy(5));
-
-            // Adding listener to the channel to catch any kind of interruptions
-            if( computer.getChannel() != null ) {
-                computer.getChannel().addListener(new AquariumChannelListener(comp));
             } else {
-                LOG.log(Level.WARNING, "Unable to set channel listener since channel is null");
-            }
-            // Print data again because was cleaned when agent connected
-            listener.getLogger().println("Aquarium Application: " + app.getUID() + " with Label: " + label.getName() + ":" + label.getVersion());
-            listener.getLogger().println("Aquarium LabelDefinition: " + label.getDefinitions().get(res.getDefinitionIndex()));
-            computer.setAcceptingTasks(true);
-
-            this.launched = true;
-
-            try {
-                node.save(); // We need to persist the "launched" setting...
-            } catch( IOException e ) {
-                LOG.log(Level.WARNING, "Could not save() agent: " + e.getMessage(), e);
+                listener.getLogger().println("Agent already launched, skipping setup...");
             }
         } catch (Throwable ex) {
             setProblem(ex);
@@ -230,7 +160,8 @@ public class AquariumLauncher extends JNLPLauncher {
             } catch (IOException | InterruptedException e) {
                 LOG.log(Level.WARNING, "Unable to remove Jenkins node", e);
             }
-            throw Throwables.propagate(ex);
+            //Throwables.throwIfUnchecked(ex);
+            throw new RuntimeException(ex);
         }
     }
 

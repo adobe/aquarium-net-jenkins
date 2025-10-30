@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 Adobe. All rights reserved.
+ * Copyright 2021-2025 Adobe. All rights reserved.
  * This file is licensed to you under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License. You may obtain a copy
  * of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -10,9 +10,11 @@
  * governing permissions and limitations under the License.
  */
 
+// Author: Sergei Parshev (@sparshev)
+
 package com.adobe.ci.aquarium.net;
 
-import edu.umd.cs.findbugs.annotations.NonNull;
+import javax.annotation.Nonnull;
 import hudson.Extension;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
@@ -53,8 +55,8 @@ public class LabelMapping extends AbstractDescribableImpl<LabelMapping> implemen
     /**
      * Finds all the matching labels for specified label
      */
-    @NonNull
-    static String getLabels(@NonNull Iterable<LabelMapping> labels, String label) {
+    @Nonnull
+    static String getLabels(@Nonnull Iterable<LabelMapping> labels, String label) {
         List<String> found_labels = new ArrayList<>();
         for (LabelMapping labelMapping : labels) {
             if( Pattern.compile(labelMapping.getPattern()).matcher(label).matches() ) {
@@ -68,7 +70,7 @@ public class LabelMapping extends AbstractDescribableImpl<LabelMapping> implemen
     @Symbol("labelMapping")
     public static class DescriptorImpl extends Descriptor<LabelMapping> {
         @Override
-        @NonNull
+        @Nonnull
         public String getDisplayName() {
             return "Label Mapping";
         }
