@@ -30,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -55,6 +56,7 @@ public class AquariumClient {
     private StreamObserver<Streaming.StreamingServiceConnectRequest> connectStream;
     private StreamObserver<Streaming.StreamingServiceSubscribeRequest> subscribeStream;
     private volatile boolean connected = false;
+    private final Object streamWriteLock = new Object();
 
     // Connection establishment tracking
     private volatile boolean connectStreamEstablished = false;
@@ -64,6 +66,24 @@ public class AquariumClient {
 
     // Request tracking for bidirectional streaming
     private final Map<String, CompletableFuture<Streaming.StreamingServiceConnectResponse>> pendingRequests = new ConcurrentHashMap<>();
+
+    // Request queue for when client is disconnected
+    private final Queue<QueuedRequest> requestQueue = new ConcurrentLinkedQueue<>();
+
+    private static class QueuedRequest {
+        final String requestType;
+        final com.google.protobuf.Any requestData;
+        final String requestId;
+        final CompletableFuture<Streaming.StreamingServiceConnectResponse> responseFuture;
+
+        QueuedRequest(String requestType, com.google.protobuf.Any requestData, String requestId,
+                      CompletableFuture<Streaming.StreamingServiceConnectResponse> responseFuture) {
+            this.requestType = requestType;
+            this.requestData = requestData;
+            this.requestId = requestId;
+            this.responseFuture = responseFuture;
+        }
+    }
 
     // Reconnection handling
     private volatile boolean reconnect = false;
@@ -78,10 +98,10 @@ public class AquariumClient {
     // Shutdown flag to avoid scheduling reconnection during intentional disconnect
     private volatile boolean shuttingDown = false;
 
-    // Listeners
-    private final List<ApplicationStateListener> stateListeners = new ArrayList<>();
-    private final List<LabelChangeListener> labelListeners = new ArrayList<>();
-    private final List<ConnectionStatusListener> connectionListeners = new ArrayList<>();
+    // Listeners - using CopyOnWriteArrayList for thread-safe iteration during notifications
+    private final List<ApplicationStateListener> stateListeners = new CopyOnWriteArrayList<>();
+    private final List<LabelChangeListener> labelListeners = new CopyOnWriteArrayList<>();
+    private final List<ConnectionStatusListener> connectionListeners = new CopyOnWriteArrayList<>();
 
     public interface ApplicationStateListener {
         void onStateChange(ApplicationState state);
@@ -195,6 +215,9 @@ public class AquariumClient {
         this.connected = true;
         notifyConnectionStatusChanged(true);
         LOGGER.info("Successfully connected to Aquarium Fish at " + config.getInitAddress());
+
+        // Process queued requests after successful connection
+        processQueuedRequests();
     }
 
     /**
@@ -308,6 +331,47 @@ public class AquariumClient {
     }
 
     /**
+     * Process all queued requests after reconnection
+     */
+    private void processQueuedRequests() {
+        int queueSize = requestQueue.size();
+        if (queueSize > 0) {
+            LOGGER.info("Processing " + queueSize + " queued requests after reconnection");
+        }
+
+        QueuedRequest queuedRequest;
+        while ((queuedRequest = requestQueue.poll()) != null) {
+            try {
+                // Check if still connected before processing
+                if (!connected || connectStream == null) {
+                    // Re-queue the request if disconnected again
+                    requestQueue.offer(queuedRequest);
+                    break;
+                }
+
+                // Send the queued request
+                Streaming.StreamingServiceConnectRequest streamRequest = Streaming.StreamingServiceConnectRequest.newBuilder()
+                    .setRequestId(queuedRequest.requestId)
+                    .setRequestType(queuedRequest.requestType)
+                    .setRequestData(queuedRequest.requestData)
+                    .build();
+
+                synchronized (streamWriteLock) {
+                    connectStream.onNext(streamRequest);
+                }
+
+                LOGGER.fine("Sent queued request: " + queuedRequest.requestType + " [" + queuedRequest.requestId + "]");
+
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Failed to send queued request: " + queuedRequest.requestType, e);
+                // Complete the future with exception
+                queuedRequest.responseFuture.completeExceptionally(
+                    new RuntimeException("Failed to send queued request after reconnection", e));
+            }
+        }
+    }
+
+    /**
      * Schedule reconnection attempt after 10 seconds
      */
     private void scheduleReconnection() {
@@ -360,6 +424,8 @@ public class AquariumClient {
             }
         } else if (requestId.equals("keep-alive")) {
             LOGGER.fine("Received keep-alive response");
+        } else if (requestId.equals("stream-limit-exceeded")) {
+            LOGGER.fine("Received stream-limit-exceeded response, disconnecting");
         } else {
             LOGGER.warning("Received response for unknown request ID: " + requestId);
         }
@@ -407,12 +473,9 @@ public class AquariumClient {
 
     /**
      * Send a request through the Connect stream and wait for response
+     * If client is disconnected, the request will be queued and sent upon reconnection
      */
     private Streaming.StreamingServiceConnectResponse sendStreamRequest(String requestType, com.google.protobuf.Any requestData) throws Exception {
-        if (!connected || connectStream == null) {
-            throw new IllegalStateException("Client is not connected");
-        }
-
         String requestId = UUID.randomUUID().toString();
         CompletableFuture<Streaming.StreamingServiceConnectResponse> responseFuture = new CompletableFuture<>();
 
@@ -420,6 +483,22 @@ public class AquariumClient {
         pendingRequests.put(requestId, responseFuture);
 
         try {
+            // Check if connected
+            if (!connected || connectStream == null) {
+                // If reconnection is enabled, queue the request
+                if (reconnect) {
+                    LOGGER.info("Client disconnected, queuing request: " + requestType + " [" + requestId + "]");
+                    QueuedRequest queuedRequest = new QueuedRequest(requestType, requestData, requestId, responseFuture);
+                    requestQueue.offer(queuedRequest);
+
+                    // Wait for response with a longer timeout to account for reconnection time
+                    return responseFuture.get(120, TimeUnit.SECONDS);
+                } else {
+                    // If reconnection is disabled, fail immediately
+                    throw new IllegalStateException("Client is not connected and reconnection is disabled");
+                }
+            }
+
             // Send the request through the stream
             Streaming.StreamingServiceConnectRequest streamRequest = Streaming.StreamingServiceConnectRequest.newBuilder()
                 .setRequestId(requestId)
@@ -427,7 +506,10 @@ public class AquariumClient {
                 .setRequestData(requestData)
                 .build();
 
-            connectStream.onNext(streamRequest);
+            // Synchronize writes to the stream as StreamObserver.onNext() is not thread-safe
+            synchronized (streamWriteLock) {
+                connectStream.onNext(streamRequest);
+            }
 
             // Wait for response with timeout
             return responseFuture.get(30, TimeUnit.SECONDS);
@@ -763,26 +845,39 @@ public class AquariumClient {
             notifyConnectionStatusChanged(false);
 
             // Properly close streams before shutting down channel
-            if (connectStream != null) {
-                try {
-                    connectStream.onCompleted();
-                } catch (Exception e) {
-                    LOGGER.log(Level.FINE, "Error completing connect stream", e);
+            // Synchronize to ensure thread-safe stream operations
+            synchronized (streamWriteLock) {
+                if (connectStream != null) {
+                    try {
+                        connectStream.onCompleted();
+                    } catch (Exception e) {
+                        LOGGER.log(Level.FINE, "Error completing connect stream", e);
+                    }
+                    connectStream = null;
                 }
-                connectStream = null;
-            }
 
-            if (subscribeStream != null) {
-                try {
-                    subscribeStream.onCompleted();
-                } catch (Exception e) {
-                    LOGGER.log(Level.FINE, "Error completing subscribe stream", e);
+                if (subscribeStream != null) {
+                    try {
+                        subscribeStream.onCompleted();
+                    } catch (Exception e) {
+                        LOGGER.log(Level.FINE, "Error completing subscribe stream", e);
+                    }
+                    subscribeStream = null;
                 }
-                subscribeStream = null;
             }
 
             // Clear pending requests
             pendingRequests.clear();
+
+            // Clear queued requests and fail them if this is an intentional shutdown
+            if (shuttingDown) {
+                QueuedRequest queuedRequest;
+                while ((queuedRequest = requestQueue.poll()) != null) {
+                    queuedRequest.responseFuture.completeExceptionally(
+                        new IllegalStateException("Client was shut down"));
+                }
+            }
+            // If not shutting down (just disconnected), leave queue intact for reconnection
 
             // Shutdown channel with proper timeout
             if (channel != null && !channel.isShutdown()) {
