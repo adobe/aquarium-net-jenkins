@@ -69,6 +69,10 @@ You can use the next steps in the pipeline:
    DefinitionInfo:  # See LabelDefinition in fish openapi yaml
    ```
 
+* `aquariumCreateLabel(templateId: 'NAME', variables: [[key: value], ...])`
+   Allows to use template defined in plugin cloud config to create label directly from the pipeline.
+   Useful for temp label to reproduce environment after the build is failed.
+
 ## Implementation
 
 The implementation is still PoC and not perfect in any way. For now it's mostly working.

@@ -94,8 +94,8 @@ public class AquariumFishPipelineIT {
                 "        script {\n" +
                 "          def t1dataWait = aquariumApplicationTask(taskUid: env.IMG_TASK_UID, wait: true)\n" +
                 "          echo " + '"' + "Image task data (waited): ${t1dataWait}" + '"' + "\n" +
-                "          echo " + '"' + "Image task options 'full' value: ${t1dataWait.options.full}" + '"' + "\n" +
-                "          echo " + '"' + "Image task result image name: ${t1dataWait.result.image_name}" + '"' + "\n" +
+                "          echo " + '"' + "Image task options 'full' value: ${t1dataWait?.options?.full}" + '"' + "\n" +
+                "          echo " + '"' + "Image task result image name: ${t1dataWait?.result?.image_name}" + '"' + "\n" +
                 "        }\n" +
                 "      }\n" +
                 "    }\n" +
@@ -170,8 +170,8 @@ public class AquariumFishPipelineIT {
                 "        script {\n" +
                 "          def t1dataWait = aquariumApplicationTask(taskUid: env.SNP_TASK_UID, wait: true)\n" +
                 "          echo " + '"' + "Snapshot task data (waited): ${t1dataWait}" + '"' + "\n" +
-                "          echo " + '"' + "Snapshot task options 'full' value: ${t1dataWait.options.full}" + '"' + "\n" +
-                "          echo " + '"' + "Snapshot task result snapshot name: ${t1dataWait.result.snapshot_names}" + '"' + "\n" +
+                "          echo " + '"' + "Snapshot task options 'full' value: ${t1dataWait?.options?.full}" + '"' + "\n" +
+                "          echo " + '"' + "Snapshot task result snapshot name: ${t1dataWait?.result?.snapshot_names}" + '"' + "\n" +
                 "        }\n" +
                 "      }\n" +
                 "    }\n" +
